@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "outDir": ".tmp/test-build",
+    "rootDir": "."
+  },
+  "include": [
+    "src/config/surcharges.ts",
+    "src/pricing/sluyter.ts",
+    "src/pricing/jgt.ts",
+    "src/pricing/jgtData.ts",
+    "src/types/fcl.ts",
+    "src/types/shipment.ts",
+    "src/utils/calculateLclCosts.ts",
+    "src/utils/calculateLclShipment.ts",
+    "src/utils/calculateLoadMeters.ts"
+  ]
+}

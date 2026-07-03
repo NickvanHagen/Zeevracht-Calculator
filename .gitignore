@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.tmp/
+*.local
+.env
+.env.*
+
+# Local source workbooks used to regenerate pricing data.
+tools/data/*.xlsx
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
