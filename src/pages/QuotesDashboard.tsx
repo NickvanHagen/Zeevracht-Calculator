@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { fetchSavedQuotes, type SavedQuote } from '../services/quoteService';
+import { deleteSavedQuote, fetchSavedQuotes, type SavedQuote } from '../services/quoteService';
 import { formatCurrency } from '../utils/formatCurrency';
 
 type QuotesDashboardProps = {
   appPassword: string;
+  onOpenQuote: (quote: SavedQuote) => void;
 };
 
-export function QuotesDashboard({ appPassword }: QuotesDashboardProps) {
+export function QuotesDashboard({ appPassword, onOpenQuote }: QuotesDashboardProps) {
   const [quotes, setQuotes] = useState<SavedQuote[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [status, setStatus] = useState('Offertes laden...');
@@ -62,6 +63,25 @@ export function QuotesDashboard({ appPassword }: QuotesDashboardProps) {
     );
   }, [quotes, searchTerm]);
 
+  const handleDeleteQuote = async (quote: SavedQuote) => {
+    const confirmed = window.confirm(`Offerte ${quote.quoteNumber} definitief verwijderen?`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    setError('');
+    setStatus('');
+
+    try {
+      await deleteSavedQuote(appPassword, quote.id);
+      setQuotes((currentQuotes) => currentQuotes.filter((currentQuote) => currentQuote.id !== quote.id));
+      setStatus('Offerte verwijderd.');
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Offerte kon niet worden verwijderd.');
+    }
+  };
+
   return (
     <section className="dashboard-page">
       <div className="dashboard-header">
@@ -95,6 +115,7 @@ export function QuotesDashboard({ appPassword }: QuotesDashboardProps) {
               <th>Incoterms</th>
               <th>Verkoopprijs</th>
               <th>Datum</th>
+              <th>Acties</th>
             </tr>
           </thead>
           <tbody>
@@ -117,6 +138,16 @@ export function QuotesDashboard({ appPassword }: QuotesDashboardProps) {
                   <strong>{formatCurrency(quote.salesPrice)}</strong>
                 </td>
                 <td>{new Date(quote.createdAt).toLocaleDateString('nl-NL')}</td>
+                <td>
+                  <div className="quote-actions">
+                    <button onClick={() => onOpenQuote(quote)} type="button">
+                      Openen
+                    </button>
+                    <button className="danger" onClick={() => void handleDeleteQuote(quote)} type="button">
+                      Verwijderen
+                    </button>
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>

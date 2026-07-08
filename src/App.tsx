@@ -13,6 +13,7 @@ import {
   type NvoLclImportTariffSet,
 } from './pricing/nvoLclImport';
 import { isSupabaseConfigured } from './services/supabaseClient';
+import type { SavedQuote } from './services/quoteService';
 import type { ShipmentDirection, ShipmentMode } from './types/shipment';
 import tffLogo from './assets/tff-logo.png';
 
@@ -43,6 +44,7 @@ function App() {
   const [shipmentMode, setShipmentMode] = useState<ShipmentMode>('lcl');
   const [direction, setDirection] = useState<ShipmentDirection>('import');
   const [appView, setAppView] = useState<'calculator' | 'quotes'>('calculator');
+  const [openedQuote, setOpenedQuote] = useState<SavedQuote | undefined>();
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [nvoTariffs, setNvoTariffs] = useState<NvoLclImportTariffSet | undefined>();
@@ -178,6 +180,13 @@ function App() {
     } catch (error) {
       setTariffUploadError(error instanceof Error ? error.message : 'Rate of exchange kon niet worden opgeslagen.');
     }
+  };
+
+  const handleOpenQuote = (quote: SavedQuote) => {
+    setOpenedQuote(quote);
+    setShipmentMode('lcl');
+    setDirection(quote.direction);
+    setAppView('calculator');
   };
 
   if (!isAuthenticated) {
@@ -323,12 +332,13 @@ function App() {
       </header>
 
       {appView === 'quotes' ? (
-        <QuotesDashboard appPassword={authenticatedPassword} />
+        <QuotesDashboard appPassword={authenticatedPassword} onOpenQuote={handleOpenQuote} />
       ) : shipmentMode === 'lcl' ? (
         <LclPage
           appPassword={authenticatedPassword}
           direction={direction}
           nvoImportTariffs={nvoTariffs}
+          openedQuote={openedQuote}
         />
       ) : (
         <FclPage direction={direction} />

@@ -18,10 +18,25 @@ export type SavedQuote = {
   marginPercentage: number;
   createdAt: string;
   createdBy: string | null;
+  payload: SavedQuotePayload;
 };
 
-export type SaveQuoteInput = Omit<SavedQuote, 'createdAt' | 'createdBy' | 'id' | 'quoteNumber'> & {
-  payload: Record<string, unknown>;
+export type SavedQuotePayload = {
+  formState?: {
+    adrSelected?: boolean;
+    customsSelected?: boolean;
+    dieselPercentage?: string;
+    marginPercentage?: string;
+    oceanFreight?: string;
+    quoteDetails?: Record<string, string>;
+    roadChargePercentage?: string;
+    rows?: Array<Record<string, unknown>>;
+  };
+  [key: string]: unknown;
+};
+
+export type SaveQuoteInput = Omit<SavedQuote, 'createdAt' | 'createdBy' | 'id' | 'payload' | 'quoteNumber'> & {
+  payload: SavedQuotePayload;
 };
 
 const requireSupabase = () => {
@@ -43,6 +58,7 @@ const mapSavedQuote = (row: {
   loading_place: string | null;
   margin_percentage: number | string | null;
   mode: ShipmentMode;
+  payload: SavedQuotePayload | null;
   purchase_price: number | string;
   quote_number: string;
   sales_price: number | string;
@@ -60,6 +76,7 @@ const mapSavedQuote = (row: {
   loadingPlace: row.loading_place ?? '',
   marginPercentage: Number(row.margin_percentage) || 0,
   mode: row.mode,
+  payload: row.payload ?? {},
   purchasePrice: Number(row.purchase_price) || 0,
   quoteNumber: row.quote_number,
   salesPrice: Number(row.sales_price) || 0,
@@ -70,7 +87,7 @@ const mapSavedQuote = (row: {
 
 export async function saveLclQuoteToSupabase(appPassword: string, quote: SaveQuoteInput) {
   const client = requireSupabase();
-  const { error } = await client.rpc('save_lcl_quote', {
+  const { data, error } = await client.rpc('save_lcl_quote', {
     p_app_password: appPassword,
     p_customer_name: quote.customerName,
     p_customer_reference: quote.customerReference || null,
@@ -89,6 +106,13 @@ export async function saveLclQuoteToSupabase(appPassword: string, quote: SaveQuo
   if (error) {
     throw new Error(error.message);
   }
+
+  const savedQuote = Array.isArray(data) ? data[0] : data;
+
+  return {
+    id: String(savedQuote?.id ?? ''),
+    quoteNumber: String(savedQuote?.quote_number ?? ''),
+  };
 }
 
 export async function fetchSavedQuotes(appPassword: string): Promise<SavedQuote[]> {
@@ -102,4 +126,16 @@ export async function fetchSavedQuotes(appPassword: string): Promise<SavedQuote[
   }
 
   return (data ?? []).map(mapSavedQuote);
+}
+
+export async function deleteSavedQuote(appPassword: string, quoteId: string) {
+  const client = requireSupabase();
+  const { error } = await client.rpc('delete_saved_quote', {
+    p_app_password: appPassword,
+    p_quote_id: quoteId,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
 }

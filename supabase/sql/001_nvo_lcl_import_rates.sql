@@ -290,6 +290,7 @@ begin
 end;
 $$;
 
+drop function if exists public.save_lcl_quote(text, text, text, text, text, text, text, text, text, numeric, numeric, numeric, jsonb);
 create or replace function public.save_lcl_quote(
   p_app_password text,
   p_direction text,
@@ -305,13 +306,17 @@ create or replace function public.save_lcl_quote(
   p_sales_price numeric,
   p_payload jsonb
 )
-returns uuid
+returns table (
+  id uuid,
+  quote_number text
+)
 language plpgsql
 security definer
 set search_path = public, extensions
 as $$
 declare
   v_quote_id uuid;
+  v_quote_number text;
 begin
   if not public.verify_tff_app_password(p_app_password) then
     raise exception 'Onjuist wachtwoord voor offertes' using errcode = '28000';
@@ -353,12 +358,13 @@ begin
     coalesce(p_payload, '{}'::jsonb),
     null
   )
-  returning id into v_quote_id;
+  returning id, quote_number into v_quote_id, v_quote_number;
 
-  return v_quote_id;
+  return query select v_quote_id, v_quote_number;
 end;
 $$;
 
+drop function if exists public.list_saved_quotes(text);
 create or replace function public.list_saved_quotes(p_app_password text)
 returns table (
   id uuid,
@@ -375,6 +381,7 @@ returns table (
   purchase_price numeric,
   margin_percentage numeric,
   sales_price numeric,
+  payload jsonb,
   created_by uuid,
   created_at timestamptz
 )
@@ -403,6 +410,7 @@ begin
     saved_quotes.purchase_price,
     saved_quotes.margin_percentage,
     saved_quotes.sales_price,
+    saved_quotes.payload,
     saved_quotes.created_by,
     saved_quotes.created_at
   from public.saved_quotes
@@ -411,11 +419,33 @@ begin
 end;
 $$;
 
+drop function if exists public.delete_saved_quote(text, uuid);
+create or replace function public.delete_saved_quote(
+  p_app_password text,
+  p_quote_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+begin
+  if not public.verify_tff_app_password(p_app_password) then
+    raise exception 'Onjuist wachtwoord voor offertes' using errcode = '28000';
+  end if;
+
+  delete from public.saved_quotes
+  where id = p_quote_id;
+end;
+$$;
+
 revoke all on function public.replace_nvo_lcl_import_rates(text, text, text, numeric, jsonb, jsonb) from public;
 revoke all on function public.update_nvo_lcl_import_exchange_rate(text, uuid, numeric) from public;
 revoke all on function public.save_lcl_quote(text, text, text, text, text, text, text, text, text, numeric, numeric, numeric, jsonb) from public;
 revoke all on function public.list_saved_quotes(text) from public;
+revoke all on function public.delete_saved_quote(text, uuid) from public;
 grant execute on function public.replace_nvo_lcl_import_rates(text, text, text, numeric, jsonb, jsonb) to anon;
 grant execute on function public.update_nvo_lcl_import_exchange_rate(text, uuid, numeric) to anon;
 grant execute on function public.save_lcl_quote(text, text, text, text, text, text, text, text, text, numeric, numeric, numeric, jsonb) to anon;
 grant execute on function public.list_saved_quotes(text) to anon;
+grant execute on function public.delete_saved_quote(text, uuid) to anon;

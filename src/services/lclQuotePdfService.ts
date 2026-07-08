@@ -30,6 +30,7 @@ export type LclQuotePdfInput = {
   logoUrl: string;
   loadMeters: string;
   palletLines: LclQuotePalletLine[];
+  quoteNumber?: string;
   salesPrice: string;
 };
 
@@ -100,6 +101,7 @@ const labels = {
     closingText:
       'Thank you for your inquiry. We hope to be of service to you. If you have any questions about this quotation, please feel free to contact us.',
     quantity: 'Quantity',
+    quoteNumber: 'Quote number',
     quoteDate: 'Quotation date',
     route: 'Route / ports',
     salesPrice: 'Total sales price',
@@ -123,6 +125,7 @@ const labels = {
     closingText:
       'Wij danken u voor uw aanvraag en hopen u van dienst te mogen zijn. Heeft u vragen over deze offerte? Neem gerust contact met ons op.',
     quantity: 'Aantal',
+    quoteNumber: 'Offertenummer',
     quoteDate: 'Offertedatum',
     route: 'Route / havens',
     salesPrice: 'Verkoopprijs totaal',
@@ -182,6 +185,7 @@ export function generateLclQuotePdf({
   loadMeters,
   logoUrl,
   palletLines,
+  quoteNumber,
   salesPrice,
 }: LclQuotePdfInput) {
   const copy = labels[language];
@@ -409,6 +413,7 @@ export function generateLclQuotePdf({
           <section class="quote-grid">
             <div>
               <div class="info-row"><span>${escapeHtml(copy.quoteDate)}</span><strong>${escapeHtml(quoteDate)}</strong></div>
+              ${quoteNumber ? optionalRow(copy.quoteNumber, quoteNumber) : ''}
               <div class="info-row"><span>${escapeHtml(copy.validity)}</span><strong>${escapeHtml(details.validity)}</strong></div>
               <div class="info-row"><span>${escapeHtml(copy.customerName)}</span><strong>${escapeHtml(details.customerName)}</strong></div>
               ${optionalRow(copy.tffReference, details.tffReference)}

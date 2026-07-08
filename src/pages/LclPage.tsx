@@ -10,7 +10,7 @@ import {
   type LclQuoteDetails,
   type LclQuoteLanguage,
 } from '../services/lclQuotePdfService';
-import { saveLclQuoteToSupabase } from '../services/quoteService';
+import { saveLclQuoteToSupabase, type SavedQuote } from '../services/quoteService';
 import type { ShipmentDirection } from '../types/shipment';
 import { calculateLclCosts } from '../utils/calculateLclCosts';
 import { calculateLclShipment } from '../utils/calculateLclShipment';
@@ -21,6 +21,7 @@ type LclPageProps = {
   appPassword: string;
   direction: ShipmentDirection;
   nvoImportTariffs?: NvoLclImportTariffSet;
+  openedQuote?: SavedQuote;
 };
 
 type PalletType = 'europallet' | 'blokpallet' | 'custom';
@@ -69,6 +70,23 @@ const createPalletRow = (type: PalletType = 'europallet'): PalletRow => {
 };
 
 const toNumber = (value: string) => Number(value) || 0;
+const toText = (value: unknown) => (typeof value === 'string' ? value : '');
+const toBoolean = (value: unknown) => (typeof value === 'boolean' ? value : false);
+
+const restorePalletRow = (row: Record<string, unknown>): PalletRow => {
+  const rowType = row.type === 'blokpallet' || row.type === 'custom' ? row.type : 'europallet';
+
+  return {
+    heightCm: toText(row.heightCm) || '120',
+    id: toText(row.id) || crypto.randomUUID(),
+    lengthCm: toText(row.lengthCm) || (rowType === 'blokpallet' ? '120' : rowType === 'europallet' ? '120' : ''),
+    quantity: toText(row.quantity) || '1',
+    stackable: toBoolean(row.stackable),
+    type: rowType,
+    weightPerItemKg: toText(row.weightPerItemKg),
+    widthCm: toText(row.widthCm) || (rowType === 'blokpallet' ? '100' : rowType === 'europallet' ? '80' : ''),
+  };
+};
 
 function PortAutocomplete({ label, name, onChange, options, placeholder, value }: PortAutocompleteProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -130,7 +148,7 @@ const createQuoteDetails = (): LclQuoteDetails => ({
   validity: '',
 });
 
-export function LclPage({ appPassword, direction, nvoImportTariffs }: LclPageProps) {
+export function LclPage({ appPassword, direction, nvoImportTariffs, openedQuote }: LclPageProps) {
   const isImport = direction === 'import';
   const [quoteDetails, setQuoteDetails] = useState<LclQuoteDetails>(createQuoteDetails);
   const [rows, setRows] = useState<PalletRow[]>([createPalletRow()]);
@@ -138,6 +156,7 @@ export function LclPage({ appPassword, direction, nvoImportTariffs }: LclPagePro
   const [adrSelected, setAdrSelected] = useState(false);
   const [oceanFreight, setOceanFreight] = useState('');
   const [marginPercentage, setMarginPercentage] = useState('');
+  const [quoteNumber, setQuoteNumber] = useState('');
   const [saveQuoteStatus, setSaveQuoteStatus] = useState('');
   const [saveQuoteError, setSaveQuoteError] = useState('');
   const [dieselPercentage, setDieselPercentage] = useState(String(defaultSurcharges.dieselPercentage));
@@ -162,6 +181,38 @@ export function LclPage({ appPassword, direction, nvoImportTariffs }: LclPagePro
   useEffect(() => {
     setCustomsSelected(false);
   }, [direction]);
+
+  useEffect(() => {
+    if (!openedQuote) {
+      return;
+    }
+
+    const formState = openedQuote.payload.formState;
+    const restoredQuoteDetails = formState?.quoteDetails ?? {};
+    const restoredRows = formState?.rows?.map(restorePalletRow) ?? [];
+
+    setQuoteNumber(openedQuote.quoteNumber);
+    setQuoteDetails({
+      customerName: toText(restoredQuoteDetails.customerName) || openedQuote.customerName,
+      customerReference: toText(restoredQuoteDetails.customerReference) || openedQuote.customerReference,
+      incoterms: toText(restoredQuoteDetails.incoterms) || openedQuote.incoterms,
+      loadingPlace: toText(restoredQuoteDetails.loadingPlace) || openedQuote.loadingPlace,
+      note: toText(restoredQuoteDetails.note),
+      route: '',
+      tffReference: toText(restoredQuoteDetails.tffReference) || openedQuote.tffReference,
+      unloadingPlace: toText(restoredQuoteDetails.unloadingPlace) || openedQuote.unloadingPlace,
+      validity: toText(restoredQuoteDetails.validity) || openedQuote.validity,
+    });
+    setRows(restoredRows.length > 0 ? restoredRows : [createPalletRow()]);
+    setCustomsSelected(toBoolean(formState?.customsSelected));
+    setAdrSelected(toBoolean(formState?.adrSelected));
+    setOceanFreight(toText(formState?.oceanFreight));
+    setMarginPercentage(toText(formState?.marginPercentage) || String(openedQuote.marginPercentage || ''));
+    setDieselPercentage(toText(formState?.dieselPercentage) || String(defaultSurcharges.dieselPercentage));
+    setRoadChargePercentage(toText(formState?.roadChargePercentage) || String(defaultSurcharges.roadChargePercentage));
+    setSaveQuoteStatus(`Offerte ${openedQuote.quoteNumber} geopend.`);
+    setSaveQuoteError('');
+  }, [openedQuote]);
 
   const totals = useMemo(
     () =>
@@ -334,6 +385,7 @@ export function LclPage({ appPassword, direction, nvoImportTariffs }: LclPagePro
       loadMeters: `${formatNumber(totals.loadMeters)} ldm`,
       logoUrl: tffLogo,
       palletLines: rows,
+      quoteNumber,
       salesPrice: formatCurrency(salesPrice),
     });
   };
@@ -353,7 +405,7 @@ export function LclPage({ appPassword, direction, nvoImportTariffs }: LclPagePro
     }
 
     try {
-      await saveLclQuoteToSupabase(appPassword, {
+      const savedQuote = await saveLclQuoteToSupabase(appPassword, {
         customerName: quoteDetails.customerName,
         customerReference: quoteDetails.customerReference,
         direction,
@@ -372,6 +424,16 @@ export function LclPage({ appPassword, direction, nvoImportTariffs }: LclPagePro
             totalPurchase,
             transportTotal,
           },
+          formState: {
+            adrSelected,
+            customsSelected,
+            dieselPercentage,
+            marginPercentage,
+            oceanFreight,
+            quoteDetails,
+            roadChargePercentage,
+            rows,
+          },
           loadMeters: totals.loadMeters,
           palletLines: rows,
           quoteDetails,
@@ -382,7 +444,8 @@ export function LclPage({ appPassword, direction, nvoImportTariffs }: LclPagePro
         unloadingPlace: quoteDetails.unloadingPlace,
         validity: quoteDetails.validity,
       });
-      setSaveQuoteStatus('Offerte opgeslagen.');
+      setQuoteNumber(savedQuote.quoteNumber);
+      setSaveQuoteStatus(`Offerte opgeslagen: ${savedQuote.quoteNumber}.`);
     } catch (error) {
       setSaveQuoteError(error instanceof Error ? error.message : 'Offerte kon niet worden opgeslagen.');
     }
@@ -626,6 +689,12 @@ export function LclPage({ appPassword, direction, nvoImportTariffs }: LclPagePro
       <ResultCard rows={resultRows} title="LCL overzicht">
         <section className="sales-card">
           <h3>VERKOOP</h3>
+          {quoteNumber ? (
+            <div className="quote-number-badge">
+              <span>Offertenummer</span>
+              <strong>{quoteNumber}</strong>
+            </div>
+          ) : null}
           <NumberInput
             label="Marge (%)"
             name="marginPercentage"
