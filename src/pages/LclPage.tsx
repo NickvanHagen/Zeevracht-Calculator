@@ -88,6 +88,20 @@ export function LclPage({ direction, nvoImportTariffs }: LclPageProps) {
   const [roadChargePercentage, setRoadChargePercentage] = useState(
     String(defaultSurcharges.roadChargePercentage),
   );
+  const portSuggestions = useMemo(() => {
+    const origins = new Set<string>();
+    const destinations = new Set<string>();
+
+    nvoImportTariffs?.rates.forEach((rate) => {
+      origins.add(rate.originCfs);
+      destinations.add(rate.destinationCfs);
+    });
+
+    return {
+      destinations: Array.from(destinations).sort((first, second) => first.localeCompare(second)),
+      origins: Array.from(origins).sort((first, second) => first.localeCompare(second)),
+    };
+  }, [nvoImportTariffs]);
 
   useEffect(() => {
     setCustomsSelected(false);
@@ -135,7 +149,7 @@ export function LclPage({ direction, nvoImportTariffs }: LclPageProps) {
         })
       : undefined;
   const oceanFreightAmount = toNumber(oceanFreight);
-  const nvoFreightAmount = nvoCalculation?.total ?? 0;
+  const nvoFreightAmount = nvoCalculation?.totalEur ?? 0;
   const effectiveOceanFreightAmount = oceanFreightAmount + nvoFreightAmount;
   const baseRate = selectedRate?.rate ?? 0;
   const customsCharge = customsSelected
@@ -163,16 +177,16 @@ export function LclPage({ direction, nvoImportTariffs }: LclPageProps) {
       ? [
           {
             label: `NVO ocean freight (${formatNumber(nvoCalculation.chargeableWm)} W/M)`,
-            value: formatNvoMoney(nvoCalculation.oceanFreight, nvoCalculation.rate.currency),
+            value:
+              nvoCalculation.rate.currency === 'USD'
+                ? `${formatNvoMoney(nvoCalculation.oceanFreight, nvoCalculation.rate.currency)} / ${formatCurrency(nvoCalculation.oceanFreightEur)}`
+                : formatCurrency(nvoCalculation.oceanFreightEur),
           },
           ...(nvoCalculation.strippingCharges
             ? [
                 {
                   label: 'NVO stripping charges',
-                  value: formatNvoMoney(
-                    nvoCalculation.strippingCharges.total,
-                    nvoCalculation.strippingCharges.currency,
-                  ),
+                  value: formatCurrency(nvoCalculation.strippingCharges.totalEur),
                 },
               ]
             : []),
@@ -180,10 +194,7 @@ export function LclPage({ direction, nvoImportTariffs }: LclPageProps) {
             ? [
                 {
                   label: 'NVO Delivery Order fee',
-                  value: formatNvoMoney(
-                    nvoCalculation.deliveryOrderFee.amount,
-                    nvoCalculation.deliveryOrderFee.currency,
-                  ),
+                  value: formatCurrency(nvoCalculation.deliveryOrderFee.amountEur),
                 },
               ]
             : []),
@@ -267,6 +278,16 @@ export function LclPage({ direction, nvoImportTariffs }: LclPageProps) {
       <div className="lcl-content">
         <SectionCard title="Offertegegevens">
           <form className="form-grid quote-form">
+            <datalist id="nvo-origin-cfs-options">
+              {portSuggestions.origins.map((origin) => (
+                <option key={origin} value={origin} />
+              ))}
+            </datalist>
+            <datalist id="nvo-destination-cfs-options">
+              {portSuggestions.destinations.map((destination) => (
+                <option key={destination} value={destination} />
+              ))}
+            </datalist>
             <InputField
               label="Klantnaam *"
               name="customerName"
@@ -296,26 +317,22 @@ export function LclPage({ direction, nvoImportTariffs }: LclPageProps) {
               value={quoteDetails.incoterms}
             />
             <InputField
-              label="Laadplaats"
+              label="Laadhaven"
+              list="nvo-origin-cfs-options"
               name="loadingPlace"
               onChange={(event) => updateQuoteDetails('loadingPlace', event.target.value)}
+              placeholder="Bijv. Xiamen"
               type="text"
               value={quoteDetails.loadingPlace}
             />
             <InputField
-              label="Losplaats"
+              label="Loshaven"
+              list="nvo-destination-cfs-options"
               name="unloadingPlace"
               onChange={(event) => updateQuoteDetails('unloadingPlace', event.target.value)}
+              placeholder="Bijv. Rotterdam"
               type="text"
               value={quoteDetails.unloadingPlace}
-            />
-            <InputField
-              label="Route / havens"
-              name="route"
-              onChange={(event) => updateQuoteDetails('route', event.target.value)}
-              placeholder="Bijv. Ningbo - Rotterdam"
-              type="text"
-              value={quoteDetails.route}
             />
             <InputField
               label="Geldigheid offerte *"

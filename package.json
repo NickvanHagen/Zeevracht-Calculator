@@ -11,6 +11,7 @@
     "test:fcl": "tsc -p tsconfig.test.json && node tests/fcl-jgt.test.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.110.1",
     "@vitejs/plugin-react": "^5.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

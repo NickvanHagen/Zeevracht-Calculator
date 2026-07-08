@@ -197,7 +197,7 @@ select {
   position: absolute;
   right: 0;
   top: calc(100% + 8px);
-  width: 280px;
+  width: 320px;
   z-index: 10;
 }
 
@@ -230,6 +230,30 @@ select {
   display: grid;
   gap: 8px;
   padding-top: 10px;
+}
+
+.compact-field {
+  gap: 4px;
+}
+
+.compact-field input {
+  min-height: 32px;
+}
+
+.settings-secondary-button {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--accent-strong);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 800;
+  min-height: 32px;
+}
+
+.settings-secondary-button:hover {
+  background: var(--control-bg);
+  border-color: var(--border-strong);
 }
 
 .tariff-upload {
@@ -271,11 +295,16 @@ select {
   overflow-wrap: anywhere;
 }
 
+.settings-status,
 .settings-warning,
 .settings-error {
   font-size: 0.78rem;
   font-weight: 800;
   margin: 0;
+}
+
+.settings-status {
+  color: var(--accent-strong);
 }
 
 .settings-warning {

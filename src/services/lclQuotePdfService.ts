@@ -91,7 +91,7 @@ const labels = {
     customerName: 'Customer name',
     customerReference: 'Customer reference',
     dimensions: 'Dimensions',
-    loadingPlace: 'Loading place',
+    loadingPlace: 'Loading port',
     loadMeters: 'Load meters',
     lclQuote: 'LCL Quotation',
     note: 'Remark / description',
@@ -106,7 +106,7 @@ const labels = {
     terms: 'Terms LCL',
     tffReference: 'TFF reference',
     type: 'Type',
-    unloadingPlace: 'Unloading place',
+    unloadingPlace: 'Unloading port',
     validity: 'Validity',
     weightPerItem: 'Kg/item',
   },
@@ -114,7 +114,7 @@ const labels = {
     customerName: 'Klantnaam',
     customerReference: 'Klantreferentie',
     dimensions: 'Afmetingen',
-    loadingPlace: 'Laadplaats',
+    loadingPlace: 'Laadhaven',
     loadMeters: 'Laadmeters',
     lclQuote: 'LCL Offerte',
     note: 'Opmerking / omschrijving',
@@ -129,7 +129,7 @@ const labels = {
     terms: 'Voorwaarden LCL',
     tffReference: 'TFF referentie',
     type: 'Type',
-    unloadingPlace: 'Losplaats',
+    unloadingPlace: 'Loshaven',
     validity: 'Geldigheid',
     weightPerItem: 'Kg/stuk',
   },
@@ -415,12 +415,11 @@ export function generateLclQuotePdf({
               ${optionalRow(copy.customerReference, details.customerReference)}
               <div class="info-row"><span>Incoterms</span><strong>${escapeHtml(details.incoterms)}</strong></div>
             </div>
-            <div>
-              ${optionalRow(copy.loadingPlace, details.loadingPlace)}
-              ${optionalRow(copy.unloadingPlace, details.unloadingPlace)}
-              ${optionalRow(copy.route, details.route)}
-              <div class="info-row"><span>${escapeHtml(copy.loadMeters)}</span><strong>${escapeHtml(loadMeters)}</strong></div>
-            </div>
+              <div>
+                ${optionalRow(copy.loadingPlace, details.loadingPlace)}
+                ${optionalRow(copy.unloadingPlace, details.unloadingPlace)}
+                <div class="info-row"><span>${escapeHtml(copy.loadMeters)}</span><strong>${escapeHtml(loadMeters)}</strong></div>
+              </div>
           </section>
 
           <h2>${escapeHtml(copy.palletDetails)}</h2>
