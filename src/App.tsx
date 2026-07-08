@@ -31,7 +31,9 @@ const directionOptions: Array<{ value: ShipmentDirection; label: string }> = [
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(
-    () => sessionStorage.getItem(SESSION_AUTH_KEY) === 'true',
+    () =>
+      sessionStorage.getItem(SESSION_AUTH_KEY) === 'true' &&
+      Boolean(sessionStorage.getItem(SESSION_PASSWORD_KEY)),
   );
   const [password, setPassword] = useState('');
   const [authenticatedPassword, setAuthenticatedPassword] = useState(
