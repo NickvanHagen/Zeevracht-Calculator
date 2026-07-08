@@ -8,6 +8,10 @@ export type NvoLocalCharge = {
   basis: string;
 };
 
+export type NvoAdditionalCharge = NvoLocalCharge & {
+  chargeKey: string;
+};
+
 export type NvoLclImportRate = {
   originCfs: string;
   destinationCfs: string;
@@ -26,6 +30,7 @@ export type NvoLclImportTariffSet = {
   validity: string;
   rates: NvoLclImportRate[];
   localCharges: {
+    usaImportCharges?: NvoAdditionalCharge[];
     stripping?: NvoLocalCharge;
     deliveryOrder?: NvoLocalCharge;
   };
@@ -38,10 +43,19 @@ export type NvoLclImportCalculation = {
   oceanFreightEur: number;
   rate: NvoLclImportRate;
   strippingCharges?: NvoLocalCharge & { total: number; totalEur: number };
+  usaImportCharges: Array<NvoAdditionalCharge & { total: number; totalEur: number }>;
   totalEur: number;
 };
 
 const DEFAULT_EXCHANGE_RATE = 1.144;
+const USA_IMPORT_CHARGES: NvoAdditionalCharge[] = [
+  { amount: 30, basis: 'minimum', chargeKey: 'usa_export_receiving', currency: 'USD', label: 'Export Receiving Fee' },
+  { amount: 10, basis: 'per shipment', chargeKey: 'usa_vgm', currency: 'USD', label: 'VGM Fee' },
+  { amount: 25, basis: 'per shipment', chargeKey: 'usa_ics2', currency: 'USD', label: 'ICS2 Filing Fee' },
+  { amount: 10, basis: 'per B/L', chargeKey: 'usa_bill_of_lading', currency: 'USD', label: 'Bill of Lading fee' },
+  { amount: 5, basis: 'per W/M', chargeKey: 'usa_congestion', currency: 'USD', label: 'Congestion fee' },
+  { amount: 8, basis: 'per W/M', chargeKey: 'usa_chassis', currency: 'USD', label: 'Chassis Fee' },
+];
 const RATE_FILE_FILTER = {
   incoterm: 'FOB',
   provider: 'NVO',
@@ -99,6 +113,16 @@ const findValidity = (xlsx: XlsxModule, workbook: WorkBook, fileName: string) =>
   return '';
 };
 
+export const formatNvoValidity = (validity: string) => {
+  const compactMatch = validity.match(/(\d{2})(\d{2})(\d{4})\s*-\s*(\d{2})(\d{2})(\d{4})/);
+
+  if (compactMatch) {
+    return `${compactMatch[1]}-${compactMatch[2]}-${compactMatch[3]} t/m ${compactMatch[4]}-${compactMatch[5]}-${compactMatch[6]}`;
+  }
+
+  return validity;
+};
+
 const findLocalCharge = (rows: unknown[][], matcher: (row: unknown[], rowText: string) => boolean): NvoLocalCharge | undefined => {
   const row = rows.find((candidate) => matcher(candidate, candidate.map(getCellText).join(' ').toLowerCase()));
 
@@ -128,6 +152,18 @@ const convertToEur = (amount: number, currency: string, exchangeRate: number) =>
   }
 
   return amount;
+};
+
+const isUnitedStatesOrigin = (originCfs: string) => {
+  const origin = normalize(originCfs);
+  const statePattern = /,\s?(al|ak|az|ar|ca|co|ct|de|fl|ga|hi|ia|id|il|in|ks|ky|la|ma|md|me|mi|mn|mo|ms|mt|nc|nd|ne|nh|nj|nm|nv|ny|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|va|vt|wa|wi|wv|wy)\b/i;
+
+  return (
+    statePattern.test(originCfs) ||
+    ['new york', 'los angeles', 'houston', 'miami', 'atlanta', 'chicago', 'charleston', 'savannah', 'oakland', 'norfolk', 'seattle'].some(
+      (port) => origin.includes(port),
+    )
+  );
 };
 
 function parseRates(xlsx: XlsxModule, workbook: WorkBook): NvoLclImportRate[] {
@@ -183,6 +219,7 @@ function parseLocalCharges(xlsx: XlsxModule, workbook: WorkBook) {
   const rows = xlsx.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
 
   return {
+    usaImportCharges: USA_IMPORT_CHARGES,
     deliveryOrder: findLocalCharge(
       rows,
       (row, rowText) =>
@@ -284,8 +321,27 @@ export function calculateNvoLclImportFob({
         ),
       }
     : undefined;
+  const usaImportCharges = isUnitedStatesOrigin(originCfs)
+    ? (tariffs?.localCharges.usaImportCharges ?? USA_IMPORT_CHARGES).map((charge) => {
+        const total =
+          charge.basis.toLowerCase().includes('w/m') ||
+          charge.chargeKey === 'usa_congestion' ||
+          charge.chargeKey === 'usa_chassis'
+            ? chargeableWm * charge.amount
+            : charge.amount;
+
+        return {
+          ...charge,
+          total,
+          totalEur: convertToEur(total, charge.currency, exchangeRate),
+        };
+      })
+    : [];
   const totalEur =
-    oceanFreightEur + (strippingCharges?.totalEur ?? 0) + (deliveryOrderFee?.amountEur ?? 0);
+    oceanFreightEur +
+    (strippingCharges?.totalEur ?? 0) +
+    (deliveryOrderFee?.amountEur ?? 0) +
+    usaImportCharges.reduce((total, charge) => total + charge.totalEur, 0);
 
   return {
     chargeableWm,
@@ -294,6 +350,7 @@ export function calculateNvoLclImportFob({
     oceanFreightEur,
     rate,
     strippingCharges,
+    usaImportCharges,
     totalEur,
   };
 }
@@ -339,12 +396,22 @@ const toTariffSet = (
 ): NvoLclImportTariffSet => {
   const deliveryOrder = localCharges.find((charge) => charge.charge_key === 'delivery_order');
   const stripping = localCharges.find((charge) => charge.charge_key === 'stripping');
+  const usaImportCharges = localCharges
+    .filter((charge) => charge.charge_key.startsWith('usa_'))
+    .map((charge) => ({
+      amount: Number(charge.amount) || 0,
+      basis: charge.basis ?? '',
+      chargeKey: charge.charge_key,
+      currency: normalizeCurrency(charge.currency),
+      label: charge.label,
+    }));
 
   return {
     exchangeRate: Number(rateFile.exchange_rate) || DEFAULT_EXCHANGE_RATE,
     fileName: rateFile.file_name,
     id: rateFile.id,
     localCharges: {
+      usaImportCharges: usaImportCharges.length > 0 ? usaImportCharges : USA_IMPORT_CHARGES,
       deliveryOrder: deliveryOrder
         ? {
             amount: Number(deliveryOrder.amount) || 0,
@@ -422,87 +489,70 @@ export async function fetchActiveNvoLclImportTariffs(): Promise<NvoLclImportTari
 export async function saveNvoLclImportTariffsToSupabase(
   tariffs: NvoLclImportTariffSet,
   exchangeRate: number,
+  appPassword: string,
 ): Promise<NvoLclImportTariffSet> {
   const client = requireSupabase();
-
-  await client
-    .from('rate_files')
-    .update({ is_active: false })
-    .match({ ...RATE_FILE_FILTER, is_active: true });
-
-  const { data: rateFile, error: rateFileError } = await client
-    .from('rate_files')
-    .insert({
-      ...RATE_FILE_FILTER,
-      exchange_rate: exchangeRate,
-      file_name: tariffs.fileName,
-      is_active: true,
-      validity: tariffs.validity || null,
-    })
-    .select('id,file_name,uploaded_at,validity,exchange_rate')
-    .single<RateFileRow>();
-
-  if (rateFileError || !rateFile) {
-    throw new Error(rateFileError?.message ?? 'Het tariefbestand kon niet worden opgeslagen.');
-  }
-
-  const { error: ratesError } = await client.from('nvo_lcl_import_rates').insert(
-    tariffs.rates.map((rate) => ({
+  const { data: rateFileId, error: replaceError } = await client.rpc('replace_nvo_lcl_import_rates', {
+    p_app_password: appPassword,
+    p_exchange_rate: exchangeRate,
+    p_file_name: tariffs.fileName,
+    p_local_charges: chargesToJson(tariffs),
+    p_rates: tariffs.rates.map((rate) => ({
       currency: normalizeCurrency(rate.currency),
       destination_cfs: rate.destinationCfs,
       frequency: rate.frequency || null,
       minimum_rate: rate.minimumRate,
       origin_cfs: rate.originCfs,
-      rate_file_id: rateFile.id,
       rate_wm: rate.rateWm,
       transit_time: rate.transitTime || null,
     })),
-  );
+    p_validity: tariffs.validity || null,
+  });
 
-  if (ratesError) {
-    throw new Error(ratesError.message);
+  if (replaceError || !rateFileId) {
+    throw new Error(replaceError?.message ?? 'Het tariefbestand kon niet worden opgeslagen.');
   }
 
-  const chargesToInsert = [
+  return fetchActiveNvoLclImportTariffs().then((activeTariffs) => activeTariffs ?? {
+    ...tariffs,
+    exchangeRate,
+    id: String(rateFileId),
+  });
+}
+
+const chargesToJson = (tariffs: NvoLclImportTariffSet) =>
+  [
+    ...(tariffs.localCharges.usaImportCharges ?? USA_IMPORT_CHARGES).map((charge) => ({
+      charge,
+      chargeKey: charge.chargeKey,
+    })),
     tariffs.localCharges.stripping
       ? { chargeKey: 'stripping', charge: tariffs.localCharges.stripping }
       : undefined,
     tariffs.localCharges.deliveryOrder
       ? { chargeKey: 'delivery_order', charge: tariffs.localCharges.deliveryOrder }
       : undefined,
-  ].filter((entry): entry is { chargeKey: string; charge: NvoLocalCharge } => Boolean(entry));
+  ]
+    .filter((entry): entry is { chargeKey: string; charge: NvoLocalCharge } => Boolean(entry))
+    .map(({ charge, chargeKey }) => ({
+      amount: charge.amount,
+      basis: charge.basis || null,
+      charge_key: chargeKey,
+      currency: normalizeCurrency(charge.currency),
+      label: charge.label,
+    }));
 
-  if (chargesToInsert.length > 0) {
-    const { error: chargesError } = await client.from('nvo_lcl_import_local_charges').insert(
-      chargesToInsert.map(({ charge, chargeKey }) => ({
-        amount: charge.amount,
-        basis: charge.basis || null,
-        charge_key: chargeKey,
-        currency: normalizeCurrency(charge.currency),
-        label: charge.label,
-        rate_file_id: rateFile.id,
-      })),
-    );
-
-    if (chargesError) {
-      throw new Error(chargesError.message);
-    }
-  }
-
-  return fetchActiveNvoLclImportTariffs().then((activeTariffs) => activeTariffs ?? {
-    ...tariffs,
-    exchangeRate,
-    id: rateFile.id,
-    uploadedAt: rateFile.uploaded_at,
-  });
-}
-
-export async function updateNvoLclImportExchangeRate(rateFileId: string, exchangeRate: number) {
+export async function updateNvoLclImportExchangeRate(
+  rateFileId: string,
+  exchangeRate: number,
+  appPassword: string,
+) {
   const client = requireSupabase();
-  const { error } = await client
-    .from('rate_files')
-    .update({ exchange_rate: exchangeRate })
-    .eq('id', rateFileId);
+  const { error } = await client.rpc('update_nvo_lcl_import_exchange_rate', {
+    p_app_password: appPassword,
+    p_exchange_rate: exchangeRate,
+    p_rate_file_id: rateFileId,
+  });
 
   if (error) {
     throw new Error(error.message);

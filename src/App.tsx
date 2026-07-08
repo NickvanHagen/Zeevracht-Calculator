@@ -5,6 +5,7 @@ import { LclPage } from './pages/LclPage';
 import { FclPage } from './pages/FclPage';
 import {
   fetchActiveNvoLclImportTariffs,
+  formatNvoValidity,
   parseNvoLclImportTariffFile,
   saveNvoLclImportTariffsToSupabase,
   updateNvoLclImportExchangeRate,
@@ -15,6 +16,7 @@ import type { ShipmentDirection, ShipmentMode } from './types/shipment';
 import tffLogo from './assets/tff-logo.png';
 
 const SESSION_AUTH_KEY = 'tff-calculator-authenticated';
+const SESSION_PASSWORD_KEY = 'tff-calculator-password';
 
 const shipmentModeOptions: Array<{ value: ShipmentMode; label: string }> = [
   { value: 'lcl', label: 'LCL' },
@@ -31,6 +33,9 @@ function App() {
     () => sessionStorage.getItem(SESSION_AUTH_KEY) === 'true',
   );
   const [password, setPassword] = useState('');
+  const [authenticatedPassword, setAuthenticatedPassword] = useState(
+    () => sessionStorage.getItem(SESSION_PASSWORD_KEY) ?? '',
+  );
   const [loginError, setLoginError] = useState('');
   const [shipmentMode, setShipmentMode] = useState<ShipmentMode>('lcl');
   const [direction, setDirection] = useState<ShipmentDirection>('import');
@@ -86,6 +91,8 @@ function App() {
 
     if (password === import.meta.env.VITE_APP_PASSWORD) {
       sessionStorage.setItem(SESSION_AUTH_KEY, 'true');
+      sessionStorage.setItem(SESSION_PASSWORD_KEY, password);
+      setAuthenticatedPassword(password);
       setIsAuthenticated(true);
       setLoginError('');
       setPassword('');
@@ -97,6 +104,8 @@ function App() {
 
   const handleLogout = () => {
     sessionStorage.removeItem(SESSION_AUTH_KEY);
+    sessionStorage.removeItem(SESSION_PASSWORD_KEY);
+    setAuthenticatedPassword('');
     setIsAuthenticated(false);
     setSettingsOpen(false);
   };
@@ -123,7 +132,11 @@ function App() {
       setTariffStatus('Tarieven importeren...');
       const parsedExchangeRate = Number(exchangeRate.replace(',', '.')) || 1.144;
       const importedTariffs = await parseNvoLclImportTariffFile(file, parsedExchangeRate);
-      const savedTariffs = await saveNvoLclImportTariffsToSupabase(importedTariffs, parsedExchangeRate);
+      const savedTariffs = await saveNvoLclImportTariffsToSupabase(
+        importedTariffs,
+        parsedExchangeRate,
+        authenticatedPassword,
+      );
       setNvoTariffs(savedTariffs);
       setExchangeRate(String(savedTariffs.exchangeRate));
       setTariffStatus('Tarieven opgeslagen in Supabase.');
@@ -155,7 +168,7 @@ function App() {
     }
 
     try {
-      await updateNvoLclImportExchangeRate(nvoTariffs.id, parsedExchangeRate);
+      await updateNvoLclImportExchangeRate(nvoTariffs.id, parsedExchangeRate, authenticatedPassword);
       setNvoTariffs({ ...nvoTariffs, exchangeRate: parsedExchangeRate });
       setTariffStatus('Rate of exchange opgeslagen.');
     } catch (error) {
@@ -275,7 +288,7 @@ function App() {
                     <div className="tariff-meta">
                       <strong>{nvoTariffs.fileName}</strong>
                       <span>{new Date(nvoTariffs.uploadedAt).toLocaleString('nl-NL')}</span>
-                      {nvoTariffs.validity ? <span>Geldig: {nvoTariffs.validity}</span> : null}
+                      {nvoTariffs.validity ? <span>Geldig: {formatNvoValidity(nvoTariffs.validity)}</span> : null}
                       <span>Rate of exchange: {nvoTariffs.exchangeRate}</span>
                     </div>
                   ) : null}

@@ -12,6 +12,17 @@ export function ResultCard({ children, title, rows }: ResultCardProps) {
   const primaryLabels = ['Laadmeters', 'Werkelijk gewicht', 'Betalend gewicht'];
   const primaryRows = rows.filter((row) => primaryLabels.includes(row.label));
   const detailRows = rows.filter((row) => !primaryLabels.includes(row.label));
+  const groupedRows = detailRows.reduce<Array<{ section: string; rows: ResultLine[] }>>((groups, row) => {
+    const section = row.section ?? 'Kosten';
+    const existingGroup = groups.find((group) => group.section === section);
+
+    if (existingGroup) {
+      existingGroup.rows.push(row);
+      return groups;
+    }
+
+    return [...groups, { rows: [row], section }];
+  }, []);
 
   return (
     <aside className="result-card">
@@ -29,9 +40,16 @@ export function ResultCard({ children, title, rows }: ResultCardProps) {
           ))}
         </div>
       ) : null}
-      <div className="summary-list">
-        {detailRows.map((row) => (
-          <SummaryRow emphasis={row.emphasis} key={row.label} label={row.label} value={row.value} />
+      <div className="result-sections">
+        {groupedRows.map((group) => (
+          <section className="result-section" key={group.section}>
+            <h3>{group.section}</h3>
+            <div className="summary-list">
+              {group.rows.map((row) => (
+                <SummaryRow emphasis={row.emphasis} key={`${group.section}-${row.label}`} label={row.label} value={row.value} />
+              ))}
+            </div>
+          </section>
         ))}
       </div>
       {children}

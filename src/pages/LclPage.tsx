@@ -34,6 +34,15 @@ type PalletRow = {
   stackable: boolean;
 };
 
+type PortAutocompleteProps = {
+  label: string;
+  name: string;
+  onChange: (value: string) => void;
+  options: string[];
+  placeholder: string;
+  value: string;
+};
+
 const incotermOptions = ['EXW', 'FCA', 'FOB', 'CFR', 'CIF', 'CPT', 'CIP', 'DAP', 'DPU', 'DDP'].map(
   (incoterm) => ({ label: incoterm, value: incoterm }),
 );
@@ -63,6 +72,54 @@ const formatNvoMoney = (value: number, currency: string) =>
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
   }).format(value)}`;
+
+function PortAutocomplete({ label, name, onChange, options, placeholder, value }: PortAutocompleteProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const normalizedValue = value.trim().toLowerCase();
+  const filteredOptions =
+    normalizedValue.length >= 2
+      ? options
+          .filter((option) => option.toLowerCase().includes(normalizedValue))
+          .slice(0, 8)
+      : [];
+
+  return (
+    <label className="field autocomplete-field" htmlFor={name}>
+      <span>{label}</span>
+      <input
+        autoComplete="off"
+        id={name}
+        name={name}
+        onBlur={() => setIsOpen(false)}
+        onChange={(event) => {
+          onChange(event.target.value);
+          setIsOpen(true);
+        }}
+        onFocus={() => setIsOpen(true)}
+        placeholder={placeholder}
+        type="text"
+        value={value}
+      />
+      {isOpen && filteredOptions.length > 0 ? (
+        <div className="autocomplete-menu">
+          {filteredOptions.map((option) => (
+            <button
+              key={option}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                onChange(option);
+                setIsOpen(false);
+              }}
+              type="button"
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </label>
+  );
+}
 
 const createQuoteDetails = (): LclQuoteDetails => ({
   customerName: '',
@@ -172,20 +229,32 @@ export function LclPage({ direction, nvoImportTariffs }: LclPageProps) {
     { label: 'Laadmeters', value: `${formatNumber(totals.loadMeters)} ldm` },
     { label: 'Werkelijk gewicht', value: `${formatNumber(totals.actualWeight, 0)} kg` },
     { label: 'Betalend gewicht', value: `${formatNumber(totals.chargeableWeight, 0)} kg` },
-    ...(oceanFreightAmount > 0 ? [{ label: 'Zeevracht handmatig', value: formatCurrency(oceanFreightAmount) }] : []),
+    ...(oceanFreightAmount > 0
+      ? [{ label: 'Zeevracht handmatig', section: 'Zeevracht', value: formatCurrency(oceanFreightAmount) }]
+      : []),
     ...(nvoCalculation
       ? [
           {
             label: `NVO ocean freight (${formatNumber(nvoCalculation.chargeableWm)} W/M)`,
+            section: 'Zeevracht',
             value:
               nvoCalculation.rate.currency === 'USD'
                 ? `${formatNvoMoney(nvoCalculation.oceanFreight, nvoCalculation.rate.currency)} / ${formatCurrency(nvoCalculation.oceanFreightEur)}`
                 : formatCurrency(nvoCalculation.oceanFreightEur),
           },
+          ...nvoCalculation.usaImportCharges.map((charge) => ({
+            label: charge.label,
+            section: 'USA importtoeslagen',
+            value:
+              charge.currency === 'USD'
+                ? `${formatNvoMoney(charge.total, charge.currency)} / ${formatCurrency(charge.totalEur)}`
+                : formatCurrency(charge.totalEur),
+          })),
           ...(nvoCalculation.strippingCharges
             ? [
                 {
                   label: 'NVO stripping charges',
+                  section: 'Lokale kosten',
                   value: formatCurrency(nvoCalculation.strippingCharges.totalEur),
                 },
               ]
@@ -194,21 +263,22 @@ export function LclPage({ direction, nvoImportTariffs }: LclPageProps) {
             ? [
                 {
                   label: 'NVO Delivery Order fee',
+                  section: 'Lokale kosten',
                   value: formatCurrency(nvoCalculation.deliveryOrderFee.amountEur),
                 },
               ]
             : []),
         ]
       : []),
-    { label: 'Zeevracht totaal', value: formatCurrency(effectiveOceanFreightAmount) },
-    { label: 'Sluyter tarief', value: selectedRate ? formatCurrency(baseRate) : 'Op aanvraag' },
-    { label: `Kilometerheffing ${formatNumber(toNumber(roadChargePercentage))}%`, value: formatCurrency(roadCharge) },
-    { label: `Dieseltoeslag ${formatNumber(toNumber(dieselPercentage))}%`, value: formatCurrency(dieselCharge) },
+    { label: 'Zeevracht totaal', section: 'Zeevracht', value: formatCurrency(effectiveOceanFreightAmount) },
+    { label: 'Sluyter tarief', section: 'Transport', value: selectedRate ? formatCurrency(baseRate) : 'Op aanvraag' },
+    { label: `Kilometerheffing ${formatNumber(toNumber(roadChargePercentage))}%`, section: 'Transport', value: formatCurrency(roadCharge) },
+    { label: `Dieseltoeslag ${formatNumber(toNumber(dieselPercentage))}%`, section: 'Transport', value: formatCurrency(dieselCharge) },
     ...(customsSelected
-      ? [{ label: isImport ? 'Inklaring' : 'Uitklaring', value: formatCurrency(customsCharge) }]
+      ? [{ label: isImport ? 'Inklaring' : 'Uitklaring', section: 'Douane', value: formatCurrency(customsCharge) }]
       : []),
-    ...(adrSelected ? [{ label: 'ADR', value: formatCurrency(adrCharge) }] : []),
-    { label: 'Totaal inkoop', value: selectedRate ? formatCurrency(totalPurchase) : 'Op aanvraag', emphasis: true },
+    ...(adrSelected ? [{ label: 'ADR', section: 'Overige toeslagen', value: formatCurrency(adrCharge) }] : []),
+    { label: 'Totaal inkoop', section: 'Totaal', value: selectedRate ? formatCurrency(totalPurchase) : 'Op aanvraag', emphasis: true },
   ];
 
   const updateRow = <TKey extends keyof PalletRow>(id: string, key: TKey, value: PalletRow[TKey]) => {
@@ -278,16 +348,6 @@ export function LclPage({ direction, nvoImportTariffs }: LclPageProps) {
       <div className="lcl-content">
         <SectionCard title="Offertegegevens">
           <form className="form-grid quote-form">
-            <datalist id="nvo-origin-cfs-options">
-              {portSuggestions.origins.map((origin) => (
-                <option key={origin} value={origin} />
-              ))}
-            </datalist>
-            <datalist id="nvo-destination-cfs-options">
-              {portSuggestions.destinations.map((destination) => (
-                <option key={destination} value={destination} />
-              ))}
-            </datalist>
             <InputField
               label="Klantnaam *"
               name="customerName"
@@ -316,22 +376,20 @@ export function LclPage({ direction, nvoImportTariffs }: LclPageProps) {
               options={[{ label: 'Kies incoterm', value: '' }, ...incotermOptions]}
               value={quoteDetails.incoterms}
             />
-            <InputField
+            <PortAutocomplete
               label="Laadhaven"
-              list="nvo-origin-cfs-options"
               name="loadingPlace"
-              onChange={(event) => updateQuoteDetails('loadingPlace', event.target.value)}
+              onChange={(value) => updateQuoteDetails('loadingPlace', value)}
+              options={portSuggestions.origins}
               placeholder="Bijv. Xiamen"
-              type="text"
               value={quoteDetails.loadingPlace}
             />
-            <InputField
+            <PortAutocomplete
               label="Loshaven"
-              list="nvo-destination-cfs-options"
               name="unloadingPlace"
-              onChange={(event) => updateQuoteDetails('unloadingPlace', event.target.value)}
+              onChange={(value) => updateQuoteDetails('unloadingPlace', value)}
+              options={portSuggestions.destinations}
               placeholder="Bijv. Rotterdam"
-              type="text"
               value={quoteDetails.unloadingPlace}
             />
             <InputField
