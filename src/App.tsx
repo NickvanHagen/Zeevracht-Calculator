@@ -3,6 +3,12 @@ import type { FormEvent } from 'react';
 import { SegmentedControl } from './components';
 import { LclPage } from './pages/LclPage';
 import { FclPage } from './pages/FclPage';
+import {
+  loadNvoLclImportTariffs,
+  parseNvoLclImportTariffFile,
+  saveNvoLclImportTariffs,
+  type NvoLclImportTariffSet,
+} from './pricing/nvoLclImport';
 import type { ShipmentDirection, ShipmentMode } from './types/shipment';
 import tffLogo from './assets/tff-logo.png';
 
@@ -28,6 +34,11 @@ function App() {
   const [direction, setDirection] = useState<ShipmentDirection>('import');
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [nvoTariffs, setNvoTariffs] = useState<NvoLclImportTariffSet | undefined>(
+    () => loadNvoLclImportTariffs(),
+  );
+  const [tariffUploadError, setTariffUploadError] = useState('');
+  const [tariffUploadWarning, setTariffUploadWarning] = useState('');
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -51,6 +62,28 @@ function App() {
     sessionStorage.removeItem(SESSION_AUTH_KEY);
     setIsAuthenticated(false);
     setSettingsOpen(false);
+  };
+
+  const handleNvoTariffUpload = async (file: File | undefined) => {
+    setTariffUploadError('');
+    setTariffUploadWarning('');
+
+    if (!file) {
+      return;
+    }
+
+    if (!file.name.toLowerCase().endsWith('.xlsx')) {
+      setTariffUploadWarning('Upload alleen Excel-bestanden met extensie .xlsx.');
+      return;
+    }
+
+    try {
+      const importedTariffs = await parseNvoLclImportTariffFile(file);
+      saveNvoLclImportTariffs(importedTariffs);
+      setNvoTariffs(importedTariffs);
+    } catch (error) {
+      setTariffUploadError(error instanceof Error ? error.message : 'Het bestand wordt niet herkend.');
+    }
   };
 
   if (!isAuthenticated) {
@@ -128,6 +161,30 @@ function App() {
                   ]}
                   value={theme}
                 />
+                <section className="settings-section">
+                  <span>Tarievenbeheer</span>
+                  <label className="tariff-upload" htmlFor="nvo-lcl-import-upload">
+                    NVO LCL Import tarieven uploaden
+                    <input
+                      accept=".xlsx"
+                      id="nvo-lcl-import-upload"
+                      onChange={(event) => {
+                        void handleNvoTariffUpload(event.target.files?.[0]);
+                        event.target.value = '';
+                      }}
+                      type="file"
+                    />
+                  </label>
+                  {nvoTariffs ? (
+                    <div className="tariff-meta">
+                      <strong>{nvoTariffs.fileName}</strong>
+                      <span>{new Date(nvoTariffs.uploadedAt).toLocaleString('nl-NL')}</span>
+                      {nvoTariffs.validity ? <span>Geldig: {nvoTariffs.validity}</span> : null}
+                    </div>
+                  ) : null}
+                  {tariffUploadWarning ? <p className="settings-warning">{tariffUploadWarning}</p> : null}
+                  {tariffUploadError ? <p className="settings-error">{tariffUploadError}</p> : null}
+                </section>
                 <button className="logout-button" onClick={handleLogout} type="button">
                   Uitloggen
                 </button>
@@ -137,7 +194,11 @@ function App() {
         </div>
       </header>
 
-      {shipmentMode === 'lcl' ? <LclPage direction={direction} /> : <FclPage direction={direction} />}
+      {shipmentMode === 'lcl' ? (
+        <LclPage direction={direction} nvoImportTariffs={nvoTariffs} />
+      ) : (
+        <FclPage direction={direction} />
+      )}
     </main>
   );
 }

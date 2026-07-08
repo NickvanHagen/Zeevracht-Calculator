@@ -3,6 +3,7 @@ import { Checkbox, InputField, NumberInput, ResultCard, SectionCard, SelectField
 import tffLogo from '../assets/tff-logo.png';
 import { customsFees } from '../config/customsFees';
 import { defaultSurcharges } from '../config/surcharges';
+import { calculateNvoLclImportFob, type NvoLclImportTariffSet } from '../pricing/nvoLclImport';
 import { getSluyterRate, sluyterFees } from '../pricing/sluyter';
 import {
   generateLclQuotePdf,
@@ -17,6 +18,7 @@ import { formatNumber } from '../utils/formatNumber';
 
 type LclPageProps = {
   direction: ShipmentDirection;
+  nvoImportTariffs?: NvoLclImportTariffSet;
 };
 
 type PalletType = 'europallet' | 'blokpallet' | 'custom';
@@ -56,6 +58,11 @@ const createPalletRow = (type: PalletType = 'europallet'): PalletRow => {
 };
 
 const toNumber = (value: string) => Number(value) || 0;
+const formatNvoMoney = (value: number, currency: string) =>
+  `${currency || 'EUR'} ${new Intl.NumberFormat('nl-NL', {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  }).format(value)}`;
 
 const createQuoteDetails = (): LclQuoteDetails => ({
   customerName: '',
@@ -69,7 +76,7 @@ const createQuoteDetails = (): LclQuoteDetails => ({
   validity: '',
 });
 
-export function LclPage({ direction }: LclPageProps) {
+export function LclPage({ direction, nvoImportTariffs }: LclPageProps) {
   const isImport = direction === 'import';
   const [quoteDetails, setQuoteDetails] = useState<LclQuoteDetails>(createQuoteDetails);
   const [rows, setRows] = useState<PalletRow[]>([createPalletRow()]);
@@ -105,7 +112,31 @@ export function LclPage({ direction }: LclPageProps) {
     chargeableWeightKg: totals.chargeableWeight,
     loadMeters: totals.loadMeters,
   });
+  const totalVolumeCbm = rows.reduce((total, row) => {
+    const quantity = Math.max(0, Math.floor(toNumber(row.quantity)));
+    const lengthCm = toNumber(row.lengthCm);
+    const widthCm = toNumber(row.widthCm);
+    const heightCm = toNumber(row.heightCm);
+
+    if (quantity <= 0 || lengthCm <= 0 || widthCm <= 0 || heightCm <= 0) {
+      return total;
+    }
+
+    return total + (quantity * lengthCm * widthCm * heightCm) / 1_000_000;
+  }, 0);
+  const nvoCalculation =
+    isImport && quoteDetails.incoterms === 'FOB'
+      ? calculateNvoLclImportFob({
+          cbm: totalVolumeCbm,
+          destinationCfs: quoteDetails.unloadingPlace || 'Rotterdam',
+          grossWeightKg: totals.actualWeight,
+          originCfs: quoteDetails.loadingPlace,
+          tariffs: nvoImportTariffs,
+        })
+      : undefined;
   const oceanFreightAmount = toNumber(oceanFreight);
+  const nvoFreightAmount = nvoCalculation?.total ?? 0;
+  const effectiveOceanFreightAmount = oceanFreightAmount + nvoFreightAmount;
   const baseRate = selectedRate?.rate ?? 0;
   const customsCharge = customsSelected
     ? isImport
@@ -119,7 +150,7 @@ export function LclPage({ direction }: LclPageProps) {
     customsCharge,
     dieselPercentage: toNumber(dieselPercentage),
     marginPercentage: toNumber(marginPercentage),
-    oceanFreight: oceanFreightAmount,
+    oceanFreight: effectiveOceanFreightAmount,
     roadChargePercentage: toNumber(roadChargePercentage),
   });
 
@@ -127,7 +158,38 @@ export function LclPage({ direction }: LclPageProps) {
     { label: 'Laadmeters', value: `${formatNumber(totals.loadMeters)} ldm` },
     { label: 'Werkelijk gewicht', value: `${formatNumber(totals.actualWeight, 0)} kg` },
     { label: 'Betalend gewicht', value: `${formatNumber(totals.chargeableWeight, 0)} kg` },
-    { label: 'Zeevracht', value: formatCurrency(oceanFreightAmount) },
+    ...(oceanFreightAmount > 0 ? [{ label: 'Zeevracht handmatig', value: formatCurrency(oceanFreightAmount) }] : []),
+    ...(nvoCalculation
+      ? [
+          {
+            label: `NVO ocean freight (${formatNumber(nvoCalculation.chargeableWm)} W/M)`,
+            value: formatNvoMoney(nvoCalculation.oceanFreight, nvoCalculation.rate.currency),
+          },
+          ...(nvoCalculation.strippingCharges
+            ? [
+                {
+                  label: 'NVO stripping charges',
+                  value: formatNvoMoney(
+                    nvoCalculation.strippingCharges.total,
+                    nvoCalculation.strippingCharges.currency,
+                  ),
+                },
+              ]
+            : []),
+          ...(nvoCalculation.deliveryOrderFee
+            ? [
+                {
+                  label: 'NVO Delivery Order fee',
+                  value: formatNvoMoney(
+                    nvoCalculation.deliveryOrderFee.amount,
+                    nvoCalculation.deliveryOrderFee.currency,
+                  ),
+                },
+              ]
+            : []),
+        ]
+      : []),
+    { label: 'Zeevracht totaal', value: formatCurrency(effectiveOceanFreightAmount) },
     { label: 'Sluyter tarief', value: selectedRate ? formatCurrency(baseRate) : 'Op aanvraag' },
     { label: `Kilometerheffing ${formatNumber(toNumber(roadChargePercentage))}%`, value: formatCurrency(roadCharge) },
     { label: `Dieseltoeslag ${formatNumber(toNumber(dieselPercentage))}%`, value: formatCurrency(dieselCharge) },

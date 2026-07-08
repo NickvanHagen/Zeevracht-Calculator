@@ -197,7 +197,7 @@ select {
   position: absolute;
   right: 0;
   top: calc(100% + 8px);
-  width: 190px;
+  width: 280px;
   z-index: 10;
 }
 
@@ -223,6 +223,67 @@ select {
 .logout-button:hover {
   background: var(--control-bg);
   color: var(--accent-strong);
+}
+
+.settings-section {
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+}
+
+.tariff-upload {
+  background: var(--control-bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text);
+  cursor: pointer;
+  display: grid;
+  font-size: 0.82rem;
+  font-weight: 800;
+  min-height: 34px;
+  place-items: center;
+  text-align: center;
+}
+
+.tariff-upload input {
+  display: none;
+}
+
+.tariff-upload:hover {
+  border-color: var(--border-strong);
+  color: var(--accent-strong);
+}
+
+.tariff-meta {
+  background: var(--field-bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--muted);
+  display: grid;
+  font-size: 0.76rem;
+  gap: 3px;
+  padding: 8px;
+}
+
+.tariff-meta strong {
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.settings-warning,
+.settings-error {
+  font-size: 0.78rem;
+  font-weight: 800;
+  margin: 0;
+}
+
+.settings-warning {
+  color: #a46000;
+}
+
+.settings-error {
+  color: #d0343f;
 }
 
 .eyebrow {
