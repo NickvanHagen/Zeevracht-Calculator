@@ -52,10 +52,43 @@ create index if not exists nvo_lcl_import_rates_file_origin_destination_idx
 create index if not exists nvo_lcl_import_local_charges_file_key_idx
   on public.nvo_lcl_import_local_charges (rate_file_id, charge_key);
 
+create sequence if not exists public.saved_quote_number_seq;
+
+create table if not exists public.saved_quotes (
+  id uuid primary key default gen_random_uuid(),
+  quote_number text not null unique default (
+    'TFF-' || to_char(now(), 'YYYY') || '-' || lpad(nextval('public.saved_quote_number_seq')::text, 5, '0')
+  ),
+  mode text not null check (mode in ('lcl', 'fcl')),
+  direction text not null check (direction in ('import', 'export')),
+  customer_name text not null,
+  tff_reference text,
+  customer_reference text,
+  incoterms text not null,
+  loading_place text,
+  unloading_place text,
+  validity text not null,
+  purchase_price numeric(12, 2) not null default 0,
+  margin_percentage numeric(8, 4) not null default 0,
+  sales_price numeric(12, 2) not null default 0,
+  payload jsonb not null default '{}'::jsonb,
+  created_by uuid null,
+  created_by_label text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists saved_quotes_created_at_idx
+  on public.saved_quotes (created_at desc);
+
+create index if not exists saved_quotes_customer_name_idx
+  on public.saved_quotes (customer_name);
+
 alter table public.rate_files enable row level security;
 alter table public.nvo_lcl_import_rates enable row level security;
 alter table public.nvo_lcl_import_local_charges enable row level security;
 alter table public.app_settings enable row level security;
+alter table public.saved_quotes enable row level security;
 
 drop policy if exists "app_settings_no_anon_access" on public.app_settings;
 create policy "app_settings_no_anon_access"
@@ -92,6 +125,11 @@ create policy "nvo_lcl_import_local_charges_select_anon"
 drop policy if exists "nvo_lcl_import_local_charges_insert_anon" on public.nvo_lcl_import_local_charges;
 drop policy if exists "nvo_lcl_import_local_charges_update_anon" on public.nvo_lcl_import_local_charges;
 drop policy if exists "nvo_lcl_import_local_charges_delete_anon" on public.nvo_lcl_import_local_charges;
+
+drop policy if exists "saved_quotes_select_anon" on public.saved_quotes;
+drop policy if exists "saved_quotes_insert_anon" on public.saved_quotes;
+drop policy if exists "saved_quotes_update_anon" on public.saved_quotes;
+drop policy if exists "saved_quotes_delete_anon" on public.saved_quotes;
 
 create or replace function public.verify_tff_app_password(p_app_password text)
 returns boolean
@@ -252,7 +290,132 @@ begin
 end;
 $$;
 
+create or replace function public.save_lcl_quote(
+  p_app_password text,
+  p_direction text,
+  p_customer_name text,
+  p_tff_reference text,
+  p_customer_reference text,
+  p_incoterms text,
+  p_loading_place text,
+  p_unloading_place text,
+  p_validity text,
+  p_purchase_price numeric,
+  p_margin_percentage numeric,
+  p_sales_price numeric,
+  p_payload jsonb
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_quote_id uuid;
+begin
+  if not public.verify_tff_app_password(p_app_password) then
+    raise exception 'Onjuist wachtwoord voor offertes' using errcode = '28000';
+  end if;
+
+  if nullif(trim(p_customer_name), '') is null then
+    raise exception 'Klantnaam is verplicht';
+  end if;
+
+  insert into public.saved_quotes (
+    mode,
+    direction,
+    customer_name,
+    tff_reference,
+    customer_reference,
+    incoterms,
+    loading_place,
+    unloading_place,
+    validity,
+    purchase_price,
+    margin_percentage,
+    sales_price,
+    payload,
+    created_by
+  )
+  values (
+    'lcl',
+    p_direction,
+    trim(p_customer_name),
+    nullif(trim(coalesce(p_tff_reference, '')), ''),
+    nullif(trim(coalesce(p_customer_reference, '')), ''),
+    p_incoterms,
+    nullif(trim(coalesce(p_loading_place, '')), ''),
+    nullif(trim(coalesce(p_unloading_place, '')), ''),
+    p_validity,
+    coalesce(p_purchase_price, 0),
+    coalesce(p_margin_percentage, 0),
+    coalesce(p_sales_price, 0),
+    coalesce(p_payload, '{}'::jsonb),
+    null
+  )
+  returning id into v_quote_id;
+
+  return v_quote_id;
+end;
+$$;
+
+create or replace function public.list_saved_quotes(p_app_password text)
+returns table (
+  id uuid,
+  quote_number text,
+  mode text,
+  direction text,
+  customer_name text,
+  tff_reference text,
+  customer_reference text,
+  incoterms text,
+  loading_place text,
+  unloading_place text,
+  validity text,
+  purchase_price numeric,
+  margin_percentage numeric,
+  sales_price numeric,
+  created_by uuid,
+  created_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+begin
+  if not public.verify_tff_app_password(p_app_password) then
+    raise exception 'Onjuist wachtwoord voor offertes' using errcode = '28000';
+  end if;
+
+  return query
+  select
+    saved_quotes.id,
+    saved_quotes.quote_number,
+    saved_quotes.mode,
+    saved_quotes.direction,
+    saved_quotes.customer_name,
+    saved_quotes.tff_reference,
+    saved_quotes.customer_reference,
+    saved_quotes.incoterms,
+    saved_quotes.loading_place,
+    saved_quotes.unloading_place,
+    saved_quotes.validity,
+    saved_quotes.purchase_price,
+    saved_quotes.margin_percentage,
+    saved_quotes.sales_price,
+    saved_quotes.created_by,
+    saved_quotes.created_at
+  from public.saved_quotes
+  order by saved_quotes.created_at desc
+  limit 250;
+end;
+$$;
+
 revoke all on function public.replace_nvo_lcl_import_rates(text, text, text, numeric, jsonb, jsonb) from public;
 revoke all on function public.update_nvo_lcl_import_exchange_rate(text, uuid, numeric) from public;
+revoke all on function public.save_lcl_quote(text, text, text, text, text, text, text, text, text, numeric, numeric, numeric, jsonb) from public;
+revoke all on function public.list_saved_quotes(text) from public;
 grant execute on function public.replace_nvo_lcl_import_rates(text, text, text, numeric, jsonb, jsonb) to anon;
 grant execute on function public.update_nvo_lcl_import_exchange_rate(text, uuid, numeric) to anon;
+grant execute on function public.save_lcl_quote(text, text, text, text, text, text, text, text, text, numeric, numeric, numeric, jsonb) to anon;
+grant execute on function public.list_saved_quotes(text) to anon;

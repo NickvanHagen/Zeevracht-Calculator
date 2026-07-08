@@ -1,0 +1,127 @@
+import { useEffect, useMemo, useState } from 'react';
+import { fetchSavedQuotes, type SavedQuote } from '../services/quoteService';
+import { formatCurrency } from '../utils/formatCurrency';
+
+type QuotesDashboardProps = {
+  appPassword: string;
+};
+
+export function QuotesDashboard({ appPassword }: QuotesDashboardProps) {
+  const [quotes, setQuotes] = useState<SavedQuote[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [status, setStatus] = useState('Offertes laden...');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let isCurrent = true;
+    setStatus('Offertes laden...');
+    setError('');
+
+    fetchSavedQuotes(appPassword)
+      .then((savedQuotes) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        setQuotes(savedQuotes);
+        setStatus(savedQuotes.length > 0 ? '' : 'Nog geen offertes opgeslagen.');
+      })
+      .catch((fetchError) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        setStatus('');
+        setError(fetchError instanceof Error ? fetchError.message : 'Offertes konden niet worden geladen.');
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [appPassword]);
+
+  const filteredQuotes = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+
+    if (!normalizedSearch) {
+      return quotes;
+    }
+
+    return quotes.filter((quote) =>
+      [
+        quote.quoteNumber,
+        quote.customerName,
+        quote.customerReference,
+        quote.tffReference,
+        quote.loadingPlace,
+        quote.unloadingPlace,
+      ]
+        .join(' ')
+        .toLowerCase()
+        .includes(normalizedSearch),
+    );
+  }, [quotes, searchTerm]);
+
+  return (
+    <section className="dashboard-page">
+      <div className="dashboard-header">
+        <div>
+          <p className="eyebrow">Team Freight Forwarding</p>
+          <h2>Offertedashboard</h2>
+        </div>
+        <label className="field dashboard-search" htmlFor="quote-search">
+          <span>Zoeken</span>
+          <input
+            id="quote-search"
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Klant, referentie, haven..."
+            type="text"
+            value={searchTerm}
+          />
+        </label>
+      </div>
+
+      {status ? <p className="settings-status">{status}</p> : null}
+      {error ? <p className="settings-error">{error}</p> : null}
+
+      <div className="quotes-table-wrap">
+        <table className="quotes-table">
+          <thead>
+            <tr>
+              <th>Offerte</th>
+              <th>Klant</th>
+              <th>Richting</th>
+              <th>Havens</th>
+              <th>Incoterms</th>
+              <th>Verkoopprijs</th>
+              <th>Datum</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredQuotes.map((quote) => (
+              <tr key={quote.id}>
+                <td>
+                  <strong>{quote.quoteNumber}</strong>
+                  {quote.tffReference ? <span>{quote.tffReference}</span> : null}
+                </td>
+                <td>
+                  <strong>{quote.customerName}</strong>
+                  {quote.customerReference ? <span>{quote.customerReference}</span> : null}
+                </td>
+                <td>{quote.direction === 'import' ? 'Import' : 'Export'}</td>
+                <td>
+                  {quote.loadingPlace || '-'} <span>naar</span> {quote.unloadingPlace || '-'}
+                </td>
+                <td>{quote.incoterms}</td>
+                <td>
+                  <strong>{formatCurrency(quote.salesPrice)}</strong>
+                </td>
+                <td>{new Date(quote.createdAt).toLocaleDateString('nl-NL')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}

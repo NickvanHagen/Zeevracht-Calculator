@@ -909,6 +909,91 @@ h1 {
   border-color: var(--border-strong);
 }
 
+.quote-save-message {
+  font-size: 0.78rem;
+  margin: 9px 0 0;
+}
+
+.dashboard-page {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.dashboard-header {
+  align-items: end;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding-bottom: 12px;
+}
+
+.dashboard-header h2 {
+  color: var(--text-strong);
+  font-size: 1.28rem;
+  margin: 0;
+}
+
+.dashboard-search {
+  width: min(100%, 360px);
+}
+
+.quotes-table-wrap {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.quotes-table {
+  border-collapse: collapse;
+  min-width: 980px;
+  width: 100%;
+}
+
+.quotes-table th,
+.quotes-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.quotes-table th {
+  background: var(--panel-bg);
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.quotes-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.quotes-table td {
+  color: var(--text);
+  font-size: 0.88rem;
+}
+
+.quotes-table td strong {
+  color: var(--text-strong);
+  display: block;
+}
+
+.quotes-table td span {
+  color: var(--muted);
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 750;
+  margin-top: 2px;
+}
+
 @media (max-width: 880px) {
   .app-header {
     align-items: stretch;
@@ -936,6 +1021,15 @@ h1 {
 
   .result-card {
     position: static;
+  }
+
+  .dashboard-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dashboard-search {
+    width: 100%;
   }
 }
 

@@ -10,6 +10,7 @@ import {
   type LclQuoteDetails,
   type LclQuoteLanguage,
 } from '../services/lclQuotePdfService';
+import { saveLclQuoteToSupabase } from '../services/quoteService';
 import type { ShipmentDirection } from '../types/shipment';
 import { calculateLclCosts } from '../utils/calculateLclCosts';
 import { calculateLclShipment } from '../utils/calculateLclShipment';
@@ -17,6 +18,7 @@ import { formatCurrency } from '../utils/formatCurrency';
 import { formatNumber } from '../utils/formatNumber';
 
 type LclPageProps = {
+  appPassword: string;
   direction: ShipmentDirection;
   nvoImportTariffs?: NvoLclImportTariffSet;
 };
@@ -67,11 +69,6 @@ const createPalletRow = (type: PalletType = 'europallet'): PalletRow => {
 };
 
 const toNumber = (value: string) => Number(value) || 0;
-const formatNvoMoney = (value: number, currency: string) =>
-  `${currency || 'EUR'} ${new Intl.NumberFormat('nl-NL', {
-    maximumFractionDigits: 2,
-    minimumFractionDigits: 2,
-  }).format(value)}`;
 
 function PortAutocomplete({ label, name, onChange, options, placeholder, value }: PortAutocompleteProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -133,7 +130,7 @@ const createQuoteDetails = (): LclQuoteDetails => ({
   validity: '',
 });
 
-export function LclPage({ direction, nvoImportTariffs }: LclPageProps) {
+export function LclPage({ appPassword, direction, nvoImportTariffs }: LclPageProps) {
   const isImport = direction === 'import';
   const [quoteDetails, setQuoteDetails] = useState<LclQuoteDetails>(createQuoteDetails);
   const [rows, setRows] = useState<PalletRow[]>([createPalletRow()]);
@@ -141,6 +138,8 @@ export function LclPage({ direction, nvoImportTariffs }: LclPageProps) {
   const [adrSelected, setAdrSelected] = useState(false);
   const [oceanFreight, setOceanFreight] = useState('');
   const [marginPercentage, setMarginPercentage] = useState('');
+  const [saveQuoteStatus, setSaveQuoteStatus] = useState('');
+  const [saveQuoteError, setSaveQuoteError] = useState('');
   const [dieselPercentage, setDieselPercentage] = useState(String(defaultSurcharges.dieselPercentage));
   const [roadChargePercentage, setRoadChargePercentage] = useState(
     String(defaultSurcharges.roadChargePercentage),
@@ -224,6 +223,7 @@ export function LclPage({ direction, nvoImportTariffs }: LclPageProps) {
     oceanFreight: effectiveOceanFreightAmount,
     roadChargePercentage: toNumber(roadChargePercentage),
   });
+  const transportTotal = baseRate + roadCharge + dieselCharge;
 
   const resultRows = [
     { label: 'Laadmeters', value: `${formatNumber(totals.loadMeters)} ldm` },
@@ -237,24 +237,18 @@ export function LclPage({ direction, nvoImportTariffs }: LclPageProps) {
           {
             label: `NVO ocean freight (${formatNumber(nvoCalculation.chargeableWm)} W/M)`,
             section: 'Zeevracht',
-            value:
-              nvoCalculation.rate.currency === 'USD'
-                ? `${formatNvoMoney(nvoCalculation.oceanFreight, nvoCalculation.rate.currency)} / ${formatCurrency(nvoCalculation.oceanFreightEur)}`
-                : formatCurrency(nvoCalculation.oceanFreightEur),
+            value: formatCurrency(nvoCalculation.oceanFreightEur),
           },
           ...nvoCalculation.usaImportCharges.map((charge) => ({
             label: charge.label,
-            section: 'USA importtoeslagen',
-            value:
-              charge.currency === 'USD'
-                ? `${formatNvoMoney(charge.total, charge.currency)} / ${formatCurrency(charge.totalEur)}`
-                : formatCurrency(charge.totalEur),
+            section: 'Zeevracht',
+            value: formatCurrency(charge.totalEur),
           })),
           ...(nvoCalculation.strippingCharges
             ? [
                 {
                   label: 'NVO stripping charges',
-                  section: 'Lokale kosten',
+                  section: 'Zeevracht',
                   value: formatCurrency(nvoCalculation.strippingCharges.totalEur),
                 },
               ]
@@ -263,17 +257,18 @@ export function LclPage({ direction, nvoImportTariffs }: LclPageProps) {
             ? [
                 {
                   label: 'NVO Delivery Order fee',
-                  section: 'Lokale kosten',
+                  section: 'Zeevracht',
                   value: formatCurrency(nvoCalculation.deliveryOrderFee.amountEur),
                 },
               ]
             : []),
         ]
       : []),
-    { label: 'Zeevracht totaal', section: 'Zeevracht', value: formatCurrency(effectiveOceanFreightAmount) },
+    { label: 'Totaal', section: 'Zeevracht', value: formatCurrency(effectiveOceanFreightAmount), emphasis: true },
     { label: 'Sluyter tarief', section: 'Transport', value: selectedRate ? formatCurrency(baseRate) : 'Op aanvraag' },
     { label: `Kilometerheffing ${formatNumber(toNumber(roadChargePercentage))}%`, section: 'Transport', value: formatCurrency(roadCharge) },
     { label: `Dieseltoeslag ${formatNumber(toNumber(dieselPercentage))}%`, section: 'Transport', value: formatCurrency(dieselCharge) },
+    { label: 'Totaal', section: 'Transport', value: selectedRate ? formatCurrency(transportTotal) : 'Op aanvraag', emphasis: true },
     ...(customsSelected
       ? [{ label: isImport ? 'Inklaring' : 'Uitklaring', section: 'Douane', value: formatCurrency(customsCharge) }]
       : []),
@@ -341,6 +336,56 @@ export function LclPage({ direction, nvoImportTariffs }: LclPageProps) {
       palletLines: rows,
       salesPrice: formatCurrency(salesPrice),
     });
+  };
+
+  const saveQuote = async () => {
+    setSaveQuoteStatus('');
+    setSaveQuoteError('');
+
+    if (!quoteDetails.customerName.trim() || !quoteDetails.incoterms.trim() || !quoteDetails.validity.trim()) {
+      setSaveQuoteError('Vul minimaal Klantnaam, Incoterms en Geldigheid offerte in.');
+      return;
+    }
+
+    if (!selectedRate) {
+      setSaveQuoteError('De offerte kan nog niet worden opgeslagen omdat het LCL-tarief op aanvraag staat.');
+      return;
+    }
+
+    try {
+      await saveLclQuoteToSupabase(appPassword, {
+        customerName: quoteDetails.customerName,
+        customerReference: quoteDetails.customerReference,
+        direction,
+        incoterms: quoteDetails.incoterms,
+        loadingPlace: quoteDetails.loadingPlace,
+        marginPercentage: toNumber(marginPercentage),
+        mode: 'lcl',
+        payload: {
+          costs: {
+            customsCharge,
+            dieselCharge,
+            effectiveOceanFreightAmount,
+            profit,
+            roadCharge,
+            salesPrice,
+            totalPurchase,
+            transportTotal,
+          },
+          loadMeters: totals.loadMeters,
+          palletLines: rows,
+          quoteDetails,
+        },
+        purchasePrice: totalPurchase,
+        salesPrice,
+        tffReference: quoteDetails.tffReference,
+        unloadingPlace: quoteDetails.unloadingPlace,
+        validity: quoteDetails.validity,
+      });
+      setSaveQuoteStatus('Offerte opgeslagen.');
+    } catch (error) {
+      setSaveQuoteError(error instanceof Error ? error.message : 'Offerte kon niet worden opgeslagen.');
+    }
   };
 
   return (
@@ -603,6 +648,9 @@ export function LclPage({ direction, nvoImportTariffs }: LclPageProps) {
             </div>
           </div>
           <div className="pdf-actions">
+            <button className="pdf-action secondary" onClick={() => void saveQuote()} type="button">
+              Offerte opslaan
+            </button>
             <button className="pdf-action" onClick={() => generateQuote('nl')} type="button">
               Offerte PDF genereren
             </button>
@@ -610,6 +658,8 @@ export function LclPage({ direction, nvoImportTariffs }: LclPageProps) {
               Quote PDF in English
             </button>
           </div>
+          {saveQuoteStatus ? <p className="settings-status quote-save-message">{saveQuoteStatus}</p> : null}
+          {saveQuoteError ? <p className="settings-error quote-save-message">{saveQuoteError}</p> : null}
         </section>
       </ResultCard>
     </div>

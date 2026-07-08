@@ -3,6 +3,7 @@ import type { FormEvent } from 'react';
 import { SegmentedControl } from './components';
 import { LclPage } from './pages/LclPage';
 import { FclPage } from './pages/FclPage';
+import { QuotesDashboard } from './pages/QuotesDashboard';
 import {
   fetchActiveNvoLclImportTariffs,
   formatNvoValidity,
@@ -39,6 +40,7 @@ function App() {
   const [loginError, setLoginError] = useState('');
   const [shipmentMode, setShipmentMode] = useState<ShipmentMode>('lcl');
   const [direction, setDirection] = useState<ShipmentDirection>('import');
+  const [appView, setAppView] = useState<'calculator' | 'quotes'>('calculator');
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [nvoTariffs, setNvoTariffs] = useState<NvoLclImportTariffSet | undefined>();
@@ -214,17 +216,30 @@ function App() {
         <div className="app-toolbar">
           <div className="toolbar-segments">
             <SegmentedControl
-              label="Transporttype"
-              onChange={setShipmentMode}
-              options={shipmentModeOptions}
-              value={shipmentMode}
+              label="Scherm"
+              onChange={setAppView}
+              options={[
+                { value: 'calculator', label: 'Calculator' },
+                { value: 'quotes', label: 'Offertes' },
+              ]}
+              value={appView}
             />
-            <SegmentedControl
-              label="Richting"
-              onChange={setDirection}
-              options={directionOptions}
-              value={direction}
-            />
+            {appView === 'calculator' ? (
+              <>
+                <SegmentedControl
+                  label="Transporttype"
+                  onChange={setShipmentMode}
+                  options={shipmentModeOptions}
+                  value={shipmentMode}
+                />
+                <SegmentedControl
+                  label="Richting"
+                  onChange={setDirection}
+                  options={directionOptions}
+                  value={direction}
+                />
+              </>
+            ) : null}
           </div>
           <div className="settings-menu">
             <button
@@ -305,8 +320,14 @@ function App() {
         </div>
       </header>
 
-      {shipmentMode === 'lcl' ? (
-        <LclPage direction={direction} nvoImportTariffs={nvoTariffs} />
+      {appView === 'quotes' ? (
+        <QuotesDashboard appPassword={authenticatedPassword} />
+      ) : shipmentMode === 'lcl' ? (
+        <LclPage
+          appPassword={authenticatedPassword}
+          direction={direction}
+          nvoImportTariffs={nvoTariffs}
+        />
       ) : (
         <FclPage direction={direction} />
       )}
