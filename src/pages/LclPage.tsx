@@ -73,6 +73,13 @@ const createPalletRow = (type: PalletType = 'europallet'): PalletRow => {
 const toNumber = (value: string) => Number(value) || 0;
 const toText = (value: unknown) => (typeof value === 'string' ? value : '');
 const toBoolean = (value: unknown) => (typeof value === 'boolean' ? value : false);
+const LCL_DIESEL_STORAGE_KEY = 'tff-lcl-diesel-percentage';
+const LCL_ROAD_CHARGE_STORAGE_KEY = 'tff-lcl-road-charge-percentage';
+
+const getStoredPercentage = (key: string, fallback: number) => {
+  const storedValue = localStorage.getItem(key);
+  return storedValue && storedValue.trim() ? storedValue : String(fallback);
+};
 
 const restorePalletRow = (row: Record<string, unknown>): PalletRow => {
   const rowType = row.type === 'blokpallet' || row.type === 'custom' ? row.type : 'europallet';
@@ -169,9 +176,11 @@ export function LclPage({
   const [savedQuoteId, setSavedQuoteId] = useState('');
   const [saveQuoteStatus, setSaveQuoteStatus] = useState('');
   const [saveQuoteError, setSaveQuoteError] = useState('');
-  const [dieselPercentage, setDieselPercentage] = useState(String(defaultSurcharges.dieselPercentage));
+  const [dieselPercentage, setDieselPercentage] = useState(() =>
+    getStoredPercentage(LCL_DIESEL_STORAGE_KEY, defaultSurcharges.dieselPercentage),
+  );
   const [roadChargePercentage, setRoadChargePercentage] = useState(
-    String(defaultSurcharges.roadChargePercentage),
+    () => getStoredPercentage(LCL_ROAD_CHARGE_STORAGE_KEY, defaultSurcharges.roadChargePercentage),
   );
   const portSuggestions = useMemo(() => {
     const origins = new Set<string>();
@@ -187,6 +196,16 @@ export function LclPage({
       origins: Array.from(origins).sort((first, second) => first.localeCompare(second)),
     };
   }, [nvoImportTariffs]);
+
+  const updateDieselPercentage = (value: string) => {
+    setDieselPercentage(value);
+    localStorage.setItem(LCL_DIESEL_STORAGE_KEY, value);
+  };
+
+  const updateRoadChargePercentage = (value: string) => {
+    setRoadChargePercentage(value);
+    localStorage.setItem(LCL_ROAD_CHARGE_STORAGE_KEY, value);
+  };
 
   useEffect(() => {
     setCustomsSelected(false);
@@ -221,8 +240,14 @@ export function LclPage({
     setAdrSelected(toBoolean(formState?.adrSelected));
     setOceanFreight(toText(formState?.oceanFreight));
     setMarginPercentage(toText(formState?.marginPercentage) || String(openedQuote.marginPercentage || ''));
-    setDieselPercentage(toText(formState?.dieselPercentage) || String(defaultSurcharges.dieselPercentage));
-    setRoadChargePercentage(toText(formState?.roadChargePercentage) || String(defaultSurcharges.roadChargePercentage));
+    setDieselPercentage(
+      toText(formState?.dieselPercentage) ||
+        getStoredPercentage(LCL_DIESEL_STORAGE_KEY, defaultSurcharges.dieselPercentage),
+    );
+    setRoadChargePercentage(
+      toText(formState?.roadChargePercentage) ||
+        getStoredPercentage(LCL_ROAD_CHARGE_STORAGE_KEY, defaultSurcharges.roadChargePercentage),
+    );
     setSaveQuoteStatus(`Offerte ${openedQuote.quoteNumber} geopend.`);
     setSaveQuoteError('');
   }, [openedQuote]);
@@ -244,8 +269,8 @@ export function LclPage({
     setMarginPercentage('');
     setQuoteNumber('');
     setSavedQuoteId('');
-    setDieselPercentage(String(defaultSurcharges.dieselPercentage));
-    setRoadChargePercentage(String(defaultSurcharges.roadChargePercentage));
+    setDieselPercentage(getStoredPercentage(LCL_DIESEL_STORAGE_KEY, defaultSurcharges.dieselPercentage));
+    setRoadChargePercentage(getStoredPercentage(LCL_ROAD_CHARGE_STORAGE_KEY, defaultSurcharges.roadChargePercentage));
     setSaveQuoteStatus('Nieuwe calculatie gestart.');
     setSaveQuoteError('');
   }, [newCalculationToken, openedQuote]);
@@ -562,8 +587,7 @@ export function LclPage({
               label="Geldigheid offerte *"
               name="validity"
               onChange={(event) => updateQuoteDetails('validity', event.target.value)}
-              placeholder="Bijv. geldig t/m 31-07-2026"
-              type="text"
+              type="date"
               value={quoteDetails.validity}
             />
             <label className="field quote-note" htmlFor="quote-note">
@@ -694,10 +718,13 @@ export function LclPage({
           </div>
         </SectionCard>
 
-        <SectionCard title="Toeslagen en opties">
+        <SectionCard
+          title="LCL zeevracht en transporttoeslagen"
+          description="Deze dieseltoeslag en kilometerheffing worden voor LCL onthouden wanneer je ze wijzigt."
+        >
           <form className="form-grid">
             <NumberInput
-              label="Zeevracht (€)"
+              label="Zeevracht handmatig (€)"
               name="oceanFreight"
               onChange={(event) => setOceanFreight(event.target.value)}
               placeholder="0,00"
@@ -706,14 +733,14 @@ export function LclPage({
             <NumberInput
               label="Kilometerheffing (%)"
               name="roadCharge"
-              onChange={(event) => setRoadChargePercentage(event.target.value)}
+              onChange={(event) => updateRoadChargePercentage(event.target.value)}
               placeholder="0"
               value={roadChargePercentage}
             />
             <NumberInput
               label="Dieseltoeslag (%)"
               name="fuelSurcharge"
-              onChange={(event) => setDieselPercentage(event.target.value)}
+              onChange={(event) => updateDieselPercentage(event.target.value)}
               placeholder="0"
               value={dieselPercentage}
             />
@@ -770,6 +797,7 @@ export function LclPage({
                 name="marginPercentage"
                 onChange={(event) => setMarginPercentage(event.target.value)}
                 placeholder="0"
+                step="0.01"
                 type="number"
                 value={marginPercentage}
               />

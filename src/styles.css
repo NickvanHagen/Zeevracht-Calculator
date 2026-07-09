@@ -781,18 +781,21 @@ h1 {
 }
 
 .result-top-summary {
-  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  background: var(--card-bg);
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
-  color: #ffffff;
+  box-shadow: 0 10px 24px rgba(0, 91, 150, 0.08);
+  color: var(--text);
   display: grid;
-  gap: 1px;
+  gap: 0;
   margin-bottom: 8px;
   overflow: hidden;
 }
 
 .result-top-summary div {
   align-items: center;
-  background: rgba(255, 255, 255, 0.09);
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
   display: flex;
   gap: 10px;
   justify-content: space-between;
@@ -800,24 +803,34 @@ h1 {
   padding: 7px 9px;
 }
 
+.result-top-summary div:last-child {
+  border-bottom: 0;
+}
+
 .result-top-summary span {
+  color: var(--muted);
   font-size: 0.74rem;
   font-weight: 900;
-  opacity: 0.86;
 }
 
 .result-top-summary strong {
+  color: var(--text-strong);
   font-size: 0.88rem;
   text-align: right;
 }
 
+.result-top-summary .sales {
+  background: linear-gradient(90deg, rgba(0, 145, 202, 0.1), rgba(0, 91, 150, 0.06));
+}
+
 .result-top-summary .sales strong {
+  color: var(--accent-strong);
   font-size: 1.02rem;
 }
 
 .result-margin-control input {
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid rgba(255, 255, 255, 0.7);
+  background: var(--field-bg);
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   color: var(--accent-strong);
   font: inherit;
@@ -830,7 +843,8 @@ h1 {
 }
 
 .result-margin-control input:focus {
-  outline: 2px solid rgba(255, 255, 255, 0.7);
+  border-color: var(--accent);
+  outline: 2px solid rgba(0, 145, 202, 0.18);
   outline-offset: 1px;
 }
 
