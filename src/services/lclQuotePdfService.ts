@@ -144,44 +144,85 @@ const labels = {
   },
 };
 
-function escapeHtml(value: string) {
+function normalizePdfText(value: string) {
   return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replaceAll('€', 'EUR')
+    .replace(/[^\x20-\x7E]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
-function optionalRow(label: string, value: string) {
-  const trimmedValue = value.trim();
+function escapePdfText(value: string) {
+  return normalizePdfText(value).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+}
 
-  if (!trimmedValue) {
-    return '';
+function formatPdfDate(value: string, language: LclQuoteLanguage) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value;
   }
 
-  return `<div class="info-row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(trimmedValue)}</strong></div>`;
+  return new Intl.DateTimeFormat(language === 'en' ? 'en-GB' : 'nl-NL').format(new Date(`${value}T00:00:00`));
 }
 
-function buildPalletRows(lines: LclQuotePalletLine[], language: LclQuoteLanguage) {
-  return lines
-    .filter((line) => Number(line.quantity) > 0)
-    .map((line) => {
-      const dimensions = [line.lengthCm, line.widthCm, line.heightCm]
-        .map((value) => value.trim())
-        .filter(Boolean)
-        .join(' x ');
+function wrapPdfText(value: string, maxLength: number) {
+  const words = normalizePdfText(value).split(' ');
+  const lines: string[] = [];
+  let currentLine = '';
 
-      return `
-        <tr>
-          <td>${escapeHtml(line.quantity || '-')}</td>
-          <td>${escapeHtml(typeLabels[language][line.type] ?? line.type)}</td>
-          <td>${escapeHtml(dimensions ? `${dimensions} cm` : '-')}</td>
-          <td>${escapeHtml(line.weightPerItemKg ? `${line.weightPerItemKg} kg` : '-')}</td>
-        </tr>
-      `;
-    })
-    .join('');
+  words.forEach((word) => {
+    const nextLine = currentLine ? `${currentLine} ${word}` : word;
+
+    if (nextLine.length > maxLength && currentLine) {
+      lines.push(currentLine);
+      currentLine = word;
+      return;
+    }
+
+    currentLine = nextLine;
+  });
+
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  return lines;
+}
+
+function createPdfBlob(pageContents: string[]) {
+  const objects: string[] = [];
+  const pageObjectIds = pageContents.map((_, index) => 4 + index * 2);
+
+  objects[0] = '<< /Type /Catalog /Pages 2 0 R >>';
+  objects[1] = `<< /Type /Pages /Kids [${pageObjectIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageObjectIds.length} >>`;
+  objects[2] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
+
+  pageContents.forEach((content, index) => {
+    const pageObjectId = 4 + index * 2;
+    const contentObjectId = pageObjectId + 1;
+
+    objects[pageObjectId - 1] =
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentObjectId} 0 R >>`;
+    objects[contentObjectId - 1] = `<< /Length ${content.length} >>\nstream\n${content}\nendstream`;
+  });
+
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+
+  objects.forEach((object, index) => {
+    offsets[index + 1] = pdf.length;
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+
+  const xrefOffset = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  offsets.slice(1).forEach((offset) => {
+    pdf += `${String(offset).padStart(10, '0')} 00000 n \n`;
+  });
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+
+  return new Blob([pdf], { type: 'application/pdf' });
 }
 
 export function generateLclQuotePdf({
@@ -189,7 +230,6 @@ export function generateLclQuotePdf({
   direction,
   language,
   loadMeters,
-  logoUrl,
   palletLines,
   quoteNumber,
   salesPrice,
@@ -204,301 +244,120 @@ export function generateLclQuotePdf({
       : direction === 'import'
         ? importTerms
         : exportTerms;
-  const popup = window.open('', '_blank', 'width=900,height=1100');
+
+  const pages: string[] = [];
+  let content = '';
+  let y = 802;
+  const left = 42;
+  const right = 553;
+
+  const text = (value: string, x: number, size = 9, lineHeight = 12) => {
+    content += `BT /F1 ${size} Tf ${x} ${y} Td (${escapePdfText(value)}) Tj ET\n`;
+    y -= lineHeight;
+  };
+  const line = (yPosition: number, width = 1) => {
+    content += `0 0.47 0.74 RG ${width} w ${left} ${yPosition} m ${right} ${yPosition} l S\n`;
+  };
+  const footer = () => {
+    line(62, 1);
+    content += `BT /F1 8 Tf ${left} 48 Td (Team Freight Forwarding   Marconiweg 14   8501 XM Joure   Nederland) Tj ET\n`;
+    content += `BT /F1 8 Tf ${left} 36 Td (T +31 \\(0\\)513 745 220   E ocean@tfflogistics.com   W www.tfflogistics.com) Tj ET\n`;
+    content += `BT /F1 8 Tf ${left} 24 Td (KvK: 69825033   BTW: NL858027550B01) Tj ET\n`;
+  };
+  const newPage = () => {
+    footer();
+    pages.push(content);
+    content = '';
+    y = 802;
+  };
+  const ensureSpace = (needed: number) => {
+    if (y - needed < 82) {
+      newPage();
+    }
+  };
+  const row = (label: string, value: string, x = left) => {
+    if (!value.trim()) {
+      return;
+    }
+
+    ensureSpace(14);
+    content += `BT /F1 8 Tf ${x} ${y} Td (${escapePdfText(label)}) Tj ET\n`;
+    content += `BT /F1 9 Tf ${x + 112} ${y} Td (${escapePdfText(value)}) Tj ET\n`;
+    y -= 14;
+  };
+
+  content += `0.89 0.96 0.99 rg ${left} 778 96 28 re f\n`;
+  content += `BT /F1 18 Tf ${left + 12} 786 Td (TFF) Tj ET\n`;
+  content += `BT /F1 13 Tf 408 790 Td (Team Freight Forwarding) Tj ET\n`;
+  line(770, 2);
+  y = 748;
+  text(copy.lclQuote, left, 22, 24);
+  row(copy.quoteDate, quoteDate);
+  if (quoteNumber) row(copy.quoteNumber, quoteNumber);
+  row(copy.validity, formatPdfDate(details.validity, language));
+  row(copy.customerName, details.customerName);
+  row(copy.tffReference, details.tffReference);
+  row(copy.customerReference, details.customerReference);
+  row('Incoterms', details.incoterms);
+  y -= 4;
+  row(copy.loadingPlace, details.loadingPlace, 310);
+  row(copy.loadingAddress, details.loadingAddress, 310);
+  row(copy.unloadingPlace, details.unloadingPlace, 310);
+  row(copy.unloadingAddress, details.unloadingAddress, 310);
+  row(copy.loadMeters, loadMeters, 310);
+
+  y -= 10;
+  text(copy.palletDetails, left, 12, 16);
+  content += `0.9 0.96 0.99 rg ${left} ${y - 2} 510 18 re f\n`;
+  text(`${copy.quantity}    ${copy.type}                 ${copy.dimensions}                         ${copy.weightPerItem}`, left + 8, 8, 18);
+  palletLines
+    .filter((palletLine) => Number(palletLine.quantity) > 0)
+    .forEach((palletLine) => {
+      ensureSpace(14);
+      const dimensions = [palletLine.lengthCm, palletLine.widthCm, palletLine.heightCm].filter(Boolean).join(' x ');
+      text(
+        `${palletLine.quantity}         ${typeLabels[language][palletLine.type] ?? palletLine.type}                 ${dimensions} cm                         ${palletLine.weightPerItemKg || '-'} kg`,
+        left + 8,
+        8,
+        14,
+      );
+    });
+
+  y -= 8;
+  ensureSpace(38);
+  content += `0.89 0.96 0.99 rg ${left} ${y - 22} 510 34 re f\n`;
+  content += `0 0.47 0.74 RG 1 w ${left} ${y - 22} 510 34 re S\n`;
+  content += `BT /F1 10 Tf ${left + 12} ${y - 3} Td (${escapePdfText(copy.salesPrice)}) Tj ET\n`;
+  content += `BT /F1 20 Tf 410 ${y - 7} Td (${escapePdfText(salesPrice)}) Tj ET\n`;
+  y -= 46;
+
+  if (details.note.trim()) {
+    text(copy.note, left, 11, 14);
+    wrapPdfText(details.note, 105).forEach((noteLine) => text(noteLine, left, 8, 11));
+    y -= 4;
+  }
+
+  text(`${copy.terms} ${direction === 'import' ? 'IMPORT' : 'EXPORT'}`, left, 11, 14);
+  terms.forEach((term) => {
+    wrapPdfText(`- ${term}`, 112).forEach((termLine) => {
+      ensureSpace(11);
+      text(termLine, left, 7.8, 10);
+    });
+  });
+
+  y -= 4;
+  wrapPdfText(copy.closingText, 112).forEach((closingLine) => text(closingLine, left, 8, 10));
+  footer();
+  pages.push(content);
+
+  const pdfUrl = URL.createObjectURL(createPdfBlob(pages));
+  const popup = window.open(pdfUrl, '_blank');
 
   if (!popup) {
     window.alert(
       language === 'en'
-        ? 'The quotation could not be opened. Please allow pop-ups for this application.'
-        : 'De offerte kon niet worden geopend. Sta pop-ups toe voor deze applicatie.',
+        ? 'The PDF could not be opened. Please allow pop-ups for this application.'
+        : 'De PDF kon niet worden geopend. Sta pop-ups toe voor deze applicatie.',
     );
-    return;
   }
-
-  const html = `<!doctype html>
-    <html lang="${language}">
-      <head>
-        <meta charset="utf-8" />
-        <title>${escapeHtml(copy.lclQuote)} - ${escapeHtml(details.customerName)}</title>
-        <style>
-          @page { margin: 10mm; size: A4; }
-          * { box-sizing: border-box; }
-          body {
-            color: #17324a;
-            font-family: Arial, Helvetica, sans-serif;
-            font-size: 9.7px;
-            line-height: 1.28;
-            margin: 0;
-          }
-          .page {
-            padding-bottom: 30mm;
-            width: 100%;
-          }
-          header {
-            align-items: center;
-            border-bottom: 2.5px solid #0077bd;
-            display: flex;
-            justify-content: space-between;
-            padding-bottom: 9px;
-            width: 100%;
-          }
-          .logo { height: 38px; object-fit: contain; }
-          .company {
-            color: #005b96;
-            font-size: 13px;
-            font-weight: 700;
-            letter-spacing: 0.01em;
-            text-align: right;
-          }
-          h1 {
-            color: #005b96;
-            font-size: 23px;
-            letter-spacing: 0.01em;
-            margin: 11px 0 9px;
-          }
-          h2 {
-            color: #005b96;
-            font-size: 12px;
-            margin: 11px 0 5px;
-          }
-          .quote-grid {
-            display: grid;
-            gap: 5px 22px;
-            grid-template-columns: 1fr 1fr;
-            width: 100%;
-          }
-          .info-row {
-            border-bottom: 1px solid #d5e7f4;
-            display: flex;
-            gap: 12px;
-            justify-content: space-between;
-            min-height: 18px;
-            padding: 3.5px 0;
-          }
-          .info-row span {
-            color: #5b7185;
-            font-weight: 700;
-          }
-          .info-row strong {
-            color: #17324a;
-            font-weight: 700;
-            text-align: right;
-          }
-          table {
-            border-collapse: collapse;
-            margin-top: 5px;
-            table-layout: fixed;
-            width: 100%;
-          }
-          th {
-            background: #e5f2fb;
-            color: #17324a;
-            font-size: 9.2px;
-            font-weight: 700;
-            text-align: left;
-          }
-          th, td {
-            border: 1px solid #d5e7f4;
-            padding: 4.5px 6px;
-            vertical-align: top;
-            word-break: break-word;
-          }
-          th:nth-child(1), td:nth-child(1) { width: 13%; }
-          th:nth-child(2), td:nth-child(2) { width: 22%; }
-          th:nth-child(3), td:nth-child(3) { width: 45%; }
-          th:nth-child(4), td:nth-child(4) { width: 20%; }
-          .total {
-            align-items: center;
-            background: linear-gradient(135deg, #eef8ff, #dceffa);
-            border: 1.5px solid #8bbfe3;
-            display: flex;
-            justify-content: space-between;
-            margin-top: 9px;
-            padding: 9px 12px;
-            width: 100%;
-          }
-          .total span {
-            color: #17324a;
-            display: block;
-            font-size: 10px;
-            font-weight: 700;
-          }
-          .total strong {
-            color: #005b96;
-            display: block;
-            font-size: 22px;
-            font-weight: 800;
-            text-align: right;
-          }
-          .note {
-            border-left: 3px solid #0077bd;
-            color: #17324a;
-            margin-top: 7px;
-            max-height: 62px;
-            overflow: hidden;
-            padding: 5px 8px;
-            white-space: pre-wrap;
-          }
-          .note strong {
-            color: #005b96;
-          }
-          .terms {
-            margin-top: 8px;
-          }
-          .terms h2 {
-            border-top: 1px solid #afcee5;
-            padding-top: 7px;
-          }
-          .terms ul {
-            font-size: 9.2px;
-            line-height: 1.38;
-            list-style-position: outside;
-            margin: 5px 0 0 15px;
-            padding: 0;
-          }
-          .terms li {
-            margin-bottom: 5px;
-            padding-left: 1px;
-          }
-          .closing-text {
-            color: #17324a;
-            font-size: 9px;
-            line-height: 1.35;
-            margin-top: 12px;
-          }
-          .pdf-footer {
-            border-top: 1.5px solid #0077bd;
-            bottom: 0;
-            color: #444f59;
-            display: grid;
-            font-size: 8px;
-            gap: 8px;
-            grid-template-columns: 1.1fr 1.2fr 1fr;
-            left: 0;
-            line-height: 1.32;
-            padding-top: 6px;
-            position: fixed;
-            right: 0;
-            width: 100%;
-          }
-          .pdf-footer strong {
-            color: #17324a;
-            display: block;
-            font-size: 8.4px;
-            margin-bottom: 2px;
-          }
-          .pdf-footer a,
-          .pdf-footer .link {
-            color: #0077bd;
-            text-decoration: none;
-          }
-          @media print {
-            .print-actions { display: none; }
-          }
-          .print-actions { margin-top: 16px; }
-          .print-actions button {
-            background: #0077bd;
-            border: 0;
-            border-radius: 6px;
-            color: white;
-            cursor: pointer;
-            font-weight: 700;
-            padding: 9px 14px;
-          }
-        </style>
-      </head>
-      <body>
-        <main class="page">
-          <header>
-            <img alt="TFF" class="logo" src="${escapeHtml(logoUrl)}" />
-            <div class="company">Team Freight Forwarding</div>
-          </header>
-
-          <h1>${escapeHtml(copy.lclQuote)}</h1>
-
-          <section class="quote-grid">
-            <div>
-              <div class="info-row"><span>${escapeHtml(copy.quoteDate)}</span><strong>${escapeHtml(quoteDate)}</strong></div>
-              ${quoteNumber ? optionalRow(copy.quoteNumber, quoteNumber) : ''}
-              <div class="info-row"><span>${escapeHtml(copy.validity)}</span><strong>${escapeHtml(details.validity)}</strong></div>
-              <div class="info-row"><span>${escapeHtml(copy.customerName)}</span><strong>${escapeHtml(details.customerName)}</strong></div>
-              ${optionalRow(copy.tffReference, details.tffReference)}
-              ${optionalRow(copy.customerReference, details.customerReference)}
-              <div class="info-row"><span>Incoterms</span><strong>${escapeHtml(details.incoterms)}</strong></div>
-            </div>
-              <div>
-                ${optionalRow(copy.loadingPlace, details.loadingPlace)}
-                ${optionalRow(copy.loadingAddress, details.loadingAddress)}
-                ${optionalRow(copy.unloadingPlace, details.unloadingPlace)}
-                ${optionalRow(copy.unloadingAddress, details.unloadingAddress)}
-                <div class="info-row"><span>${escapeHtml(copy.loadMeters)}</span><strong>${escapeHtml(loadMeters)}</strong></div>
-              </div>
-          </section>
-
-          <h2>${escapeHtml(copy.palletDetails)}</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>${escapeHtml(copy.quantity)}</th>
-                <th>${escapeHtml(copy.type)}</th>
-                <th>${escapeHtml(copy.dimensions)}</th>
-                <th>${escapeHtml(copy.weightPerItem)}</th>
-              </tr>
-            </thead>
-            <tbody>${buildPalletRows(palletLines, language)}</tbody>
-          </table>
-
-          <div class="total">
-            <span>${escapeHtml(copy.salesPrice)}</span>
-            <strong>${escapeHtml(salesPrice)}</strong>
-          </div>
-
-          ${
-            details.note.trim()
-              ? `<section class="note"><strong>${escapeHtml(copy.note)}</strong><br />${escapeHtml(details.note)}</section>`
-              : ''
-          }
-
-          <section class="terms">
-            <h2>${escapeHtml(copy.terms)} ${direction === 'import' ? 'IMPORT' : 'EXPORT'}</h2>
-            <ul>
-              ${terms.map((term) => `<li>${escapeHtml(term)}</li>`).join('')}
-            </ul>
-          </section>
-          <p class="closing-text">${escapeHtml(copy.closingText)}</p>
-        </main>
-
-        <footer class="pdf-footer">
-          <div>
-            <strong>Team Freight Forwarding</strong>
-            Marconiweg 14<br />
-            8501 XM Joure<br />
-            Nederland
-          </div>
-          <div>
-            T +31 (0)513 745 220<br />
-            E <span class="link">ocean@tfflogistics.com</span><br />
-            W <span class="link">www.tfflogistics.com</span>
-          </div>
-          <div>
-            KvK: 69825033<br />
-            BTW: NL858027550B01
-          </div>
-        </footer>
-
-        <div class="print-actions">
-          <button onclick="window.print()">${escapeHtml(copy.printButton)}</button>
-        </div>
-        <script>
-          window.addEventListener('load', () => {
-            window.focus();
-            window.print();
-          });
-        </script>
-      </body>
-    </html>`;
-
-  popup.document.open();
-  popup.document.write(html);
-  popup.document.close();
 }

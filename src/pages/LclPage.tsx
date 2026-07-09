@@ -70,7 +70,7 @@ const createPalletRow = (type: PalletType = 'europallet'): PalletRow => {
   };
 };
 
-const toNumber = (value: string) => Number(value) || 0;
+const toNumber = (value: string) => Number(value.replace(',', '.')) || 0;
 const toText = (value: unknown) => (typeof value === 'string' ? value : '');
 const toBoolean = (value: unknown) => (typeof value === 'boolean' ? value : false);
 const LCL_DIESEL_STORAGE_KEY = 'tff-lcl-diesel-percentage';
@@ -80,6 +80,9 @@ const getStoredPercentage = (key: string, fallback: number) => {
   const storedValue = localStorage.getItem(key);
   return storedValue && storedValue.trim() ? storedValue : String(fallback);
 };
+
+const toEditableAmount = (value: number) => (Number.isFinite(value) ? value.toFixed(2) : '');
+const toEditablePercentage = (value: number) => (Number.isFinite(value) ? value.toFixed(2).replace(/\.00$/, '') : '');
 
 const restorePalletRow = (row: Record<string, unknown>): PalletRow => {
   const rowType = row.type === 'blokpallet' || row.type === 'custom' ? row.type : 'europallet';
@@ -172,6 +175,8 @@ export function LclPage({
   const [adrSelected, setAdrSelected] = useState(false);
   const [oceanFreight, setOceanFreight] = useState('');
   const [marginPercentage, setMarginPercentage] = useState('');
+  const [salesPriceInput, setSalesPriceInput] = useState('');
+  const [pricingInputMode, setPricingInputMode] = useState<'margin' | 'sales'>('margin');
   const [quoteNumber, setQuoteNumber] = useState('');
   const [savedQuoteId, setSavedQuoteId] = useState('');
   const [saveQuoteStatus, setSaveQuoteStatus] = useState('');
@@ -207,6 +212,11 @@ export function LclPage({
     localStorage.setItem(LCL_ROAD_CHARGE_STORAGE_KEY, value);
   };
 
+  const updateMarginPercentage = (value: string) => {
+    setPricingInputMode('margin');
+    setMarginPercentage(value);
+  };
+
   useEffect(() => {
     setCustomsSelected(false);
   }, [direction]);
@@ -240,6 +250,8 @@ export function LclPage({
     setAdrSelected(toBoolean(formState?.adrSelected));
     setOceanFreight(toText(formState?.oceanFreight));
     setMarginPercentage(toText(formState?.marginPercentage) || String(openedQuote.marginPercentage || ''));
+    setSalesPriceInput(toText(formState?.salesPriceInput) || toEditableAmount(openedQuote.salesPrice || 0));
+    setPricingInputMode(formState?.pricingInputMode === 'sales' ? 'sales' : 'margin');
     setDieselPercentage(
       toText(formState?.dieselPercentage) ||
         getStoredPercentage(LCL_DIESEL_STORAGE_KEY, defaultSurcharges.dieselPercentage),
@@ -267,6 +279,8 @@ export function LclPage({
     setAdrSelected(false);
     setOceanFreight('');
     setMarginPercentage('');
+    setSalesPriceInput('');
+    setPricingInputMode('margin');
     setQuoteNumber('');
     setSavedQuoteId('');
     setDieselPercentage(getStoredPercentage(LCL_DIESEL_STORAGE_KEY, defaultSurcharges.dieselPercentage));
@@ -326,7 +340,7 @@ export function LclPage({
       : customsFees.exportClearance
     : 0;
   const adrCharge = adrSelected ? sluyterFees.adr : 0;
-  const { dieselCharge, profit, roadCharge, salesPrice, totalPurchase } = calculateLclCosts({
+  const { dieselCharge, profit: calculatedProfit, roadCharge, salesPrice: calculatedSalesPrice, totalPurchase } = calculateLclCosts({
     adrCharge,
     baseRate,
     customsCharge,
@@ -335,12 +349,41 @@ export function LclPage({
     oceanFreight: effectiveOceanFreightAmount,
     roadChargePercentage: toNumber(roadChargePercentage),
   });
+  const manualSalesPrice = toNumber(salesPriceInput);
+  const hasManualSalesPrice = pricingInputMode === 'sales' && salesPriceInput.trim() !== '';
+  const salesPrice = hasManualSalesPrice ? Math.max(0, manualSalesPrice) : calculatedSalesPrice;
+  const profit = selectedRate ? salesPrice - totalPurchase : calculatedProfit;
+  const effectiveMarginPercentage =
+    selectedRate && totalPurchase > 0 ? (profit / totalPurchase) * 100 : toNumber(marginPercentage);
   const transportTotal = baseRate + roadCharge + dieselCharge;
 
+  useEffect(() => {
+    if (!selectedRate || pricingInputMode === 'sales') {
+      return;
+    }
+
+    setSalesPriceInput(toEditableAmount(calculatedSalesPrice));
+  }, [calculatedSalesPrice, pricingInputMode, selectedRate]);
+
+  useEffect(() => {
+    if (!selectedRate || pricingInputMode !== 'sales' || !salesPriceInput.trim() || totalPurchase <= 0) {
+      return;
+    }
+
+    setMarginPercentage(toEditablePercentage(((toNumber(salesPriceInput) - totalPurchase) / totalPurchase) * 100));
+  }, [pricingInputMode, salesPriceInput, selectedRate, totalPurchase]);
+
+  const updateSalesPrice = (value: string) => {
+    setPricingInputMode('sales');
+    setSalesPriceInput(value);
+
+    const nextSalesPrice = toNumber(value);
+    if (totalPurchase > 0 && value.trim()) {
+      setMarginPercentage(toEditablePercentage(((nextSalesPrice - totalPurchase) / totalPurchase) * 100));
+    }
+  };
+
   const resultRows = [
-    { label: 'Laadmeters', value: `${formatNumber(totals.loadMeters)} ldm` },
-    { label: 'Werkelijk gewicht', value: `${formatNumber(totals.actualWeight, 0)} kg` },
-    { label: 'Betalend gewicht', value: `${formatNumber(totals.chargeableWeight, 0)} kg` },
     ...(oceanFreightAmount > 0
       ? [{ label: 'Zeevracht handmatig', section: 'Zeevracht', value: formatCurrency(oceanFreightAmount) }]
       : []),
@@ -473,7 +516,7 @@ export function LclPage({
         existingQuoteId: savedQuoteId || undefined,
         incoterms: quoteDetails.incoterms,
         loadingPlace: quoteDetails.loadingPlace,
-        marginPercentage: toNumber(marginPercentage),
+        marginPercentage: effectiveMarginPercentage,
         mode: 'lcl',
         payload: {
           costs: {
@@ -492,9 +535,11 @@ export function LclPage({
             dieselPercentage,
             marginPercentage,
             oceanFreight,
+            pricingInputMode,
             quoteDetails,
             roadChargePercentage,
             rows,
+            salesPriceInput,
           },
           loadMeters: totals.loadMeters,
           palletLines: rows,
@@ -606,6 +651,22 @@ export function LclPage({
         <SectionCard
           title="Zending invoeren"
           description="Meerdere palletformaten binnen dezelfde LCL-zending."
+          headerContent={
+            <div className="shipment-live-metrics">
+              <div>
+                <span>Laadmeters</span>
+                <strong>{formatNumber(totals.loadMeters)} ldm</strong>
+              </div>
+              <div>
+                <span>Werkelijk gewicht</span>
+                <strong>{formatNumber(totals.actualWeight, 0)} kg</strong>
+              </div>
+              <div>
+                <span>Betalend gewicht</span>
+                <strong>{formatNumber(totals.chargeableWeight, 0)} kg</strong>
+              </div>
+            </div>
+          }
         >
           <div className="table-note">
             Stapelbaar rekent vloerplekken op basis van max. 240 cm hoogte en 1.750 kg per laadmeter.
@@ -795,7 +856,7 @@ export function LclPage({
                 aria-label="Marge percentage"
                 inputMode="decimal"
                 name="marginPercentage"
-                onChange={(event) => setMarginPercentage(event.target.value)}
+                onChange={(event) => updateMarginPercentage(event.target.value)}
                 placeholder="0"
                 step="0.01"
                 type="number"
@@ -806,11 +867,23 @@ export function LclPage({
               <span>Winst</span>
               <strong>{selectedRate ? formatCurrency(profit) : 'Op aanvraag'}</strong>
             </div>
+            <div className="result-sales-control">
+              <span>Verkoopprijs</span>
+              <input
+                aria-label="Verkoopprijs"
+                inputMode="decimal"
+                name="salesPrice"
+                onChange={(event) => updateSalesPrice(event.target.value)}
+                placeholder="0,00"
+                step="0.01"
+                type="number"
+                value={salesPriceInput}
+              />
+            </div>
           </>
         }
         quoteNumber={quoteNumber}
         rows={resultRows}
-        salesPrice={selectedRate ? formatCurrency(salesPrice) : 'Op aanvraag'}
         title="LCL overzicht"
         totalPurchase={selectedRate ? formatCurrency(totalPurchase) : 'Op aanvraag'}
       />

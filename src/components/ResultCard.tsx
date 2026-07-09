@@ -60,10 +60,12 @@ export function ResultCard({
           <strong>{totalPurchase ?? '-'}</strong>
         </div>
         {commercialSummary}
-        <div className="sales">
-          <span>Verkoopprijs</span>
-          <strong>{salesPrice ?? '-'}</strong>
-        </div>
+        {salesPrice ? (
+          <div className="sales">
+            <span>Verkoopprijs</span>
+            <strong>{salesPrice}</strong>
+          </div>
+        ) : null}
         <div>
           <span>Offertenummer</span>
           <strong>{quoteNumber || 'Nog niet opgeslagen'}</strong>

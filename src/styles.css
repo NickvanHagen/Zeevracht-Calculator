@@ -410,9 +410,17 @@ h1 {
 }
 
 .section-heading {
+  align-items: flex-start;
   border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
   margin-bottom: 12px;
   padding-bottom: 9px;
+}
+
+.section-heading-content {
+  flex: 0 0 auto;
 }
 
 .section-heading h2,
@@ -842,10 +850,57 @@ h1 {
   width: 84px;
 }
 
+.result-sales-control input {
+  background: var(--field-bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  color: var(--accent-strong);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 900;
+  height: 30px;
+  padding: 0 7px;
+  text-align: right;
+  width: 112px;
+}
+
+.result-sales-control input:focus {
+  border-color: var(--accent);
+  outline: 2px solid rgba(0, 145, 202, 0.18);
+  outline-offset: 1px;
+}
+
 .result-margin-control input:focus {
   border-color: var(--accent);
   outline: 2px solid rgba(0, 145, 202, 0.18);
   outline-offset: 1px;
+}
+
+.shipment-live-metrics {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(3, minmax(92px, 1fr));
+  min-width: 360px;
+}
+
+.shipment-live-metrics div {
+  background: var(--control-bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  display: grid;
+  gap: 2px;
+  padding: 6px 8px;
+}
+
+.shipment-live-metrics span {
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 900;
+}
+
+.shipment-live-metrics strong {
+  color: var(--accent-strong);
+  font-size: 0.86rem;
 }
 
 .result-primary-actions {
@@ -1161,6 +1216,16 @@ h1 {
   .dashboard-search {
     width: 100%;
   }
+
+  .section-heading {
+    flex-direction: column;
+  }
+
+  .section-heading-content,
+  .shipment-live-metrics {
+    min-width: 0;
+    width: 100%;
+  }
 }
 
 @media (max-width: 620px) {
@@ -1186,5 +1251,9 @@ h1 {
   .quote-form,
   .quote-note {
     grid-column: auto;
+  }
+
+  .shipment-live-metrics {
+    grid-template-columns: 1fr;
   }
 }

@@ -28,9 +28,11 @@ export type SavedQuotePayload = {
     dieselPercentage?: string;
     marginPercentage?: string;
     oceanFreight?: string;
+    pricingInputMode?: string;
     quoteDetails?: Record<string, string>;
     roadChargePercentage?: string;
     rows?: Array<Record<string, unknown>>;
+    salesPriceInput?: string;
   };
   [key: string]: unknown;
 };
