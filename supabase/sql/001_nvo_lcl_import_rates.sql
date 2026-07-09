@@ -449,6 +449,65 @@ begin
 end;
 $$;
 
+drop function if exists public.get_saved_quote(text, uuid);
+create or replace function public.get_saved_quote(
+  p_app_password text,
+  p_quote_id uuid
+)
+returns table (
+  id uuid,
+  quote_number text,
+  mode text,
+  direction text,
+  customer_name text,
+  tff_reference text,
+  customer_reference text,
+  incoterms text,
+  loading_place text,
+  unloading_place text,
+  validity text,
+  purchase_price numeric,
+  margin_percentage numeric,
+  sales_price numeric,
+  payload jsonb,
+  created_by uuid,
+  created_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+begin
+  if not public.verify_tff_app_password(p_app_password) then
+    raise exception 'Onjuist wachtwoord voor offertes' using errcode = '28000';
+  end if;
+
+  return query
+  select
+    saved_quotes.id,
+    saved_quotes.quote_number,
+    saved_quotes.mode,
+    saved_quotes.direction,
+    saved_quotes.customer_name,
+    saved_quotes.tff_reference,
+    saved_quotes.customer_reference,
+    saved_quotes.incoterms,
+    saved_quotes.loading_place,
+    saved_quotes.unloading_place,
+    saved_quotes.validity,
+    saved_quotes.purchase_price,
+    saved_quotes.margin_percentage,
+    saved_quotes.sales_price,
+    saved_quotes.payload,
+    saved_quotes.created_by,
+    saved_quotes.created_at
+  from public.saved_quotes
+  where saved_quotes.id = p_quote_id
+    and saved_quotes.mode = 'lcl'
+  limit 1;
+end;
+$$;
+
 drop function if exists public.delete_saved_quote(text, uuid);
 create or replace function public.delete_saved_quote(
   p_app_password text,
@@ -473,9 +532,11 @@ revoke all on function public.replace_nvo_lcl_import_rates(text, text, text, num
 revoke all on function public.update_nvo_lcl_import_exchange_rate(text, uuid, numeric) from public;
 revoke all on function public.save_lcl_quote(text, uuid, text, text, text, text, text, text, text, text, numeric, numeric, numeric, jsonb) from public;
 revoke all on function public.list_saved_quotes(text) from public;
+revoke all on function public.get_saved_quote(text, uuid) from public;
 revoke all on function public.delete_saved_quote(text, uuid) from public;
 grant execute on function public.replace_nvo_lcl_import_rates(text, text, text, numeric, jsonb, jsonb) to anon;
 grant execute on function public.update_nvo_lcl_import_exchange_rate(text, uuid, numeric) to anon;
 grant execute on function public.save_lcl_quote(text, uuid, text, text, text, text, text, text, text, text, numeric, numeric, numeric, jsonb) to anon;
 grant execute on function public.list_saved_quotes(text) to anon;
+grant execute on function public.get_saved_quote(text, uuid) to anon;
 grant execute on function public.delete_saved_quote(text, uuid) to anon;

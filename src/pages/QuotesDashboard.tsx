@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { deleteSavedQuote, fetchSavedQuotes, type SavedQuote } from '../services/quoteService';
+import { deleteSavedQuote, fetchSavedQuote, fetchSavedQuotes, type SavedQuote } from '../services/quoteService';
 import { formatCurrency } from '../utils/formatCurrency';
 
 type QuotesDashboardProps = {
@@ -10,6 +10,7 @@ type QuotesDashboardProps = {
 export function QuotesDashboard({ appPassword, onOpenQuote }: QuotesDashboardProps) {
   const [quotes, setQuotes] = useState<SavedQuote[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [openingQuoteId, setOpeningQuoteId] = useState('');
   const [status, setStatus] = useState('Offertes laden...');
   const [error, setError] = useState('');
 
@@ -82,6 +83,21 @@ export function QuotesDashboard({ appPassword, onOpenQuote }: QuotesDashboardPro
     }
   };
 
+  const handleOpenQuote = async (quote: SavedQuote) => {
+    setError('');
+    setStatus('');
+    setOpeningQuoteId(quote.id);
+
+    try {
+      const fullQuote = await fetchSavedQuote(appPassword, quote.id);
+      onOpenQuote(fullQuote);
+    } catch (openError) {
+      setError(openError instanceof Error ? openError.message : 'Offerte kon niet worden geopend.');
+    } finally {
+      setOpeningQuoteId('');
+    }
+  };
+
   return (
     <section className="dashboard-page">
       <div className="dashboard-header">
@@ -140,8 +156,8 @@ export function QuotesDashboard({ appPassword, onOpenQuote }: QuotesDashboardPro
                 <td>{new Date(quote.createdAt).toLocaleDateString('nl-NL')}</td>
                 <td>
                   <div className="quote-actions">
-                    <button onClick={() => onOpenQuote(quote)} type="button">
-                      Openen
+                    <button disabled={openingQuoteId === quote.id} onClick={() => void handleOpenQuote(quote)} type="button">
+                      {openingQuoteId === quote.id ? 'Openen...' : 'Openen'}
                     </button>
                     <button className="danger" onClick={() => void handleDeleteQuote(quote)} type="button">
                       Verwijderen

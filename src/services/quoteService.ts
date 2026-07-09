@@ -40,15 +40,7 @@ export type SaveQuoteInput = Omit<SavedQuote, 'createdAt' | 'createdBy' | 'id' |
   payload: SavedQuotePayload;
 };
 
-const requireSupabase = () => {
-  if (!supabase) {
-    throw new Error('Supabase is nog niet ingesteld. Voeg VITE_SUPABASE_URL en VITE_SUPABASE_ANON_KEY toe.');
-  }
-
-  return supabase;
-};
-
-const mapSavedQuote = (row: {
+type SavedQuoteRow = {
   created_at: string;
   created_by: string | null;
   customer_name: string;
@@ -59,14 +51,40 @@ const mapSavedQuote = (row: {
   loading_place: string | null;
   margin_percentage: number | string | null;
   mode: ShipmentMode;
-  payload: SavedQuotePayload | null;
+  payload: SavedQuotePayload | string | null;
   purchase_price: number | string;
   quote_number: string;
   sales_price: number | string;
   tff_reference: string | null;
   unloading_place: string | null;
   validity: string;
-}): SavedQuote => ({
+};
+
+const requireSupabase = () => {
+  if (!supabase) {
+    throw new Error('Supabase is nog niet ingesteld. Voeg VITE_SUPABASE_URL en VITE_SUPABASE_ANON_KEY toe.');
+  }
+
+  return supabase;
+};
+
+const normalizePayload = (payload: SavedQuotePayload | string | null): SavedQuotePayload => {
+  if (!payload) {
+    return {};
+  }
+
+  if (typeof payload === 'string') {
+    try {
+      return JSON.parse(payload) as SavedQuotePayload;
+    } catch {
+      return {};
+    }
+  }
+
+  return payload;
+};
+
+const mapSavedQuote = (row: SavedQuoteRow): SavedQuote => ({
   createdAt: row.created_at,
   createdBy: row.created_by,
   customerName: row.customer_name,
@@ -77,7 +95,7 @@ const mapSavedQuote = (row: {
   loadingPlace: row.loading_place ?? '',
   marginPercentage: Number(row.margin_percentage) || 0,
   mode: row.mode,
-  payload: row.payload ?? {},
+  payload: normalizePayload(row.payload),
   purchasePrice: Number(row.purchase_price) || 0,
   quoteNumber: row.quote_number,
   salesPrice: Number(row.sales_price) || 0,
@@ -128,6 +146,26 @@ export async function fetchSavedQuotes(appPassword: string): Promise<SavedQuote[
   }
 
   return (data ?? []).map(mapSavedQuote);
+}
+
+export async function fetchSavedQuote(appPassword: string, quoteId: string): Promise<SavedQuote> {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc('get_saved_quote', {
+    p_app_password: appPassword,
+    p_quote_id: quoteId,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const savedQuote = Array.isArray(data) ? data[0] : data;
+
+  if (!savedQuote) {
+    throw new Error('Offerte niet gevonden.');
+  }
+
+  return mapSavedQuote(savedQuote as SavedQuoteRow);
 }
 
 export async function deleteSavedQuote(appPassword: string, quoteId: string) {
