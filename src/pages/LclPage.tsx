@@ -744,15 +744,30 @@ export function LclPage({
         </SectionCard>
       </div>
 
-      <ResultCard rows={resultRows} title="LCL overzicht">
-        <section className="sales-card">
-          <h3>VERKOOP</h3>
-          {quoteNumber ? (
-            <div className="quote-number-badge">
-              <span>Offertenummer</span>
-              <strong>{quoteNumber}</strong>
-            </div>
-          ) : null}
+      <ResultCard
+        actions={
+          <>
+            <button className="pdf-action secondary" onClick={() => void saveQuote()} type="button">
+              Offerte opslaan
+            </button>
+            <button className="pdf-action" onClick={() => generateQuote('nl')} type="button">
+              Offerte PDF genereren
+            </button>
+            <button className="pdf-action secondary" onClick={() => generateQuote('en')} type="button">
+              Quote PDF in English
+            </button>
+            {saveQuoteStatus ? <p className="settings-status quote-save-message">{saveQuoteStatus}</p> : null}
+            {saveQuoteError ? <p className="settings-error quote-save-message">{saveQuoteError}</p> : null}
+          </>
+        }
+        quoteNumber={quoteNumber}
+        rows={resultRows}
+        salesPrice={selectedRate ? formatCurrency(salesPrice) : 'Op aanvraag'}
+        title="LCL overzicht"
+        totalPurchase={selectedRate ? formatCurrency(totalPurchase) : 'Op aanvraag'}
+      >
+        <details className="result-section sales-card">
+          <summary>Verkoopdetails</summary>
           <NumberInput
             label="Marge (%)"
             name="marginPercentage"
@@ -774,20 +789,7 @@ export function LclPage({
               <strong>{selectedRate ? formatCurrency(salesPrice) : 'Op aanvraag'}</strong>
             </div>
           </div>
-          <div className="pdf-actions">
-            <button className="pdf-action secondary" onClick={() => void saveQuote()} type="button">
-              Offerte opslaan
-            </button>
-            <button className="pdf-action" onClick={() => generateQuote('nl')} type="button">
-              Offerte PDF genereren
-            </button>
-            <button className="pdf-action secondary" onClick={() => generateQuote('en')} type="button">
-              Quote PDF in English
-            </button>
-          </div>
-          {saveQuoteStatus ? <p className="settings-status quote-save-message">{saveQuoteStatus}</p> : null}
-          {saveQuoteError ? <p className="settings-error quote-save-message">{saveQuoteError}</p> : null}
-        </section>
+        </details>
       </ResultCard>
     </div>
   );
