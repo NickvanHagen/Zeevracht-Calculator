@@ -234,6 +234,11 @@ function App() {
         </div>
         <div className="app-toolbar">
           <div className="toolbar-segments">
+            <nav aria-label="Nieuwe calculatie" className="tab-nav">
+              <button className="tab-button toolbar-action-button" onClick={handleNewCalculation} type="button">
+                Nieuwe calculatie
+              </button>
+            </nav>
             <SegmentedControl
               label="Scherm"
               onChange={setAppView}
@@ -243,11 +248,6 @@ function App() {
               ]}
               value={appView}
             />
-            <nav aria-label="Nieuwe calculatie" className="tab-nav">
-              <button className="tab-button toolbar-action-button" onClick={handleNewCalculation} type="button">
-                Nieuwe calculatie
-              </button>
-            </nav>
             {appView === 'calculator' ? (
               <>
                 <SegmentedControl
