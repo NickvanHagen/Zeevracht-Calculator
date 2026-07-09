@@ -5,7 +5,9 @@ export type LclQuoteDetails = {
   tffReference: string;
   customerReference: string;
   incoterms: string;
+  loadingAddress: string;
   loadingPlace: string;
+  unloadingAddress: string;
   unloadingPlace: string;
   route: string;
   validity: string;
@@ -92,6 +94,7 @@ const labels = {
     customerName: 'Customer name',
     customerReference: 'Customer reference',
     dimensions: 'Dimensions',
+    loadingAddress: 'Loading address',
     loadingPlace: 'Loading port',
     loadMeters: 'Load meters',
     lclQuote: 'LCL Quotation',
@@ -108,6 +111,7 @@ const labels = {
     terms: 'Terms LCL',
     tffReference: 'TFF reference',
     type: 'Type',
+    unloadingAddress: 'Unloading address',
     unloadingPlace: 'Unloading port',
     validity: 'Validity',
     weightPerItem: 'Kg/item',
@@ -116,6 +120,7 @@ const labels = {
     customerName: 'Klantnaam',
     customerReference: 'Klantreferentie',
     dimensions: 'Afmetingen',
+    loadingAddress: 'Laadadres',
     loadingPlace: 'Laadhaven',
     loadMeters: 'Laadmeters',
     lclQuote: 'LCL Offerte',
@@ -132,6 +137,7 @@ const labels = {
     terms: 'Voorwaarden LCL',
     tffReference: 'TFF referentie',
     type: 'Type',
+    unloadingAddress: 'Losadres',
     unloadingPlace: 'Loshaven',
     validity: 'Geldigheid',
     weightPerItem: 'Kg/stuk',
@@ -422,7 +428,9 @@ export function generateLclQuotePdf({
             </div>
               <div>
                 ${optionalRow(copy.loadingPlace, details.loadingPlace)}
+                ${optionalRow(copy.loadingAddress, details.loadingAddress)}
                 ${optionalRow(copy.unloadingPlace, details.unloadingPlace)}
+                ${optionalRow(copy.unloadingAddress, details.unloadingAddress)}
                 <div class="info-row"><span>${escapeHtml(copy.loadMeters)}</span><strong>${escapeHtml(loadMeters)}</strong></div>
               </div>
           </section>

@@ -45,6 +45,7 @@ function App() {
   const [direction, setDirection] = useState<ShipmentDirection>('import');
   const [appView, setAppView] = useState<'calculator' | 'quotes'>('calculator');
   const [openedQuote, setOpenedQuote] = useState<SavedQuote | undefined>();
+  const [newCalculationToken, setNewCalculationToken] = useState(0);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [nvoTariffs, setNvoTariffs] = useState<NvoLclImportTariffSet | undefined>();
@@ -189,6 +190,13 @@ function App() {
     setAppView('calculator');
   };
 
+  const handleNewCalculation = () => {
+    setOpenedQuote(undefined);
+    setShipmentMode('lcl');
+    setAppView('calculator');
+    setNewCalculationToken((currentToken) => currentToken + 1);
+  };
+
   if (!isAuthenticated) {
     return (
       <main className="login-shell">
@@ -235,6 +243,11 @@ function App() {
               ]}
               value={appView}
             />
+            <nav aria-label="Nieuwe calculatie" className="tab-nav">
+              <button className="tab-button toolbar-action-button" onClick={handleNewCalculation} type="button">
+                Nieuwe calculatie
+              </button>
+            </nav>
             {appView === 'calculator' ? (
               <>
                 <SegmentedControl
@@ -337,6 +350,7 @@ function App() {
         <LclPage
           appPassword={authenticatedPassword}
           direction={direction}
+          newCalculationToken={newCalculationToken}
           nvoImportTariffs={nvoTariffs}
           openedQuote={openedQuote}
         />

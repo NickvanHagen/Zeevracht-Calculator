@@ -20,6 +20,7 @@ import { formatNumber } from '../utils/formatNumber';
 type LclPageProps = {
   appPassword: string;
   direction: ShipmentDirection;
+  newCalculationToken: number;
   nvoImportTariffs?: NvoLclImportTariffSet;
   openedQuote?: SavedQuote;
 };
@@ -140,15 +141,23 @@ const createQuoteDetails = (): LclQuoteDetails => ({
   customerName: '',
   customerReference: '',
   incoterms: '',
+  loadingAddress: '',
   loadingPlace: '',
   note: '',
   route: '',
   tffReference: '',
+  unloadingAddress: '',
   unloadingPlace: '',
   validity: '',
 });
 
-export function LclPage({ appPassword, direction, nvoImportTariffs, openedQuote }: LclPageProps) {
+export function LclPage({
+  appPassword,
+  direction,
+  newCalculationToken,
+  nvoImportTariffs,
+  openedQuote,
+}: LclPageProps) {
   const isImport = direction === 'import';
   const [quoteDetails, setQuoteDetails] = useState<LclQuoteDetails>(createQuoteDetails);
   const [rows, setRows] = useState<PalletRow[]>([createPalletRow()]);
@@ -198,10 +207,12 @@ export function LclPage({ appPassword, direction, nvoImportTariffs, openedQuote 
       customerName: toText(restoredQuoteDetails.customerName) || openedQuote.customerName,
       customerReference: toText(restoredQuoteDetails.customerReference) || openedQuote.customerReference,
       incoterms: toText(restoredQuoteDetails.incoterms) || openedQuote.incoterms,
+      loadingAddress: toText(restoredQuoteDetails.loadingAddress),
       loadingPlace: toText(restoredQuoteDetails.loadingPlace) || openedQuote.loadingPlace,
       note: toText(restoredQuoteDetails.note),
       route: '',
       tffReference: toText(restoredQuoteDetails.tffReference) || openedQuote.tffReference,
+      unloadingAddress: toText(restoredQuoteDetails.unloadingAddress),
       unloadingPlace: toText(restoredQuoteDetails.unloadingPlace) || openedQuote.unloadingPlace,
       validity: toText(restoredQuoteDetails.validity) || openedQuote.validity,
     });
@@ -216,7 +227,11 @@ export function LclPage({ appPassword, direction, nvoImportTariffs, openedQuote 
     setSaveQuoteError('');
   }, [openedQuote]);
 
-  const startNewCalculation = () => {
+  useEffect(() => {
+    if (newCalculationToken === 0) {
+      return;
+    }
+
     setQuoteDetails(createQuoteDetails());
     setRows([createPalletRow()]);
     setCustomsSelected(false);
@@ -229,7 +244,7 @@ export function LclPage({ appPassword, direction, nvoImportTariffs, openedQuote 
     setRoadChargePercentage(String(defaultSurcharges.roadChargePercentage));
     setSaveQuoteStatus('Nieuwe calculatie gestart.');
     setSaveQuoteError('');
-  };
+  }, [newCalculationToken]);
 
   const totals = useMemo(
     () =>
@@ -477,15 +492,6 @@ export function LclPage({ appPassword, direction, nvoImportTariffs, openedQuote 
   return (
     <div className="page-grid lcl-layout">
       <div className="lcl-content">
-        <div className="lcl-action-bar">
-          <div>
-            <span>LCL calculatie</span>
-            {quoteNumber ? <strong>{quoteNumber}</strong> : <strong>Nieuwe zending</strong>}
-          </div>
-          <button onClick={startNewCalculation} type="button">
-            Nieuwe calculatie
-          </button>
-        </div>
         <SectionCard title="Offertegegevens">
           <form className="form-grid quote-form">
             <InputField
@@ -524,6 +530,14 @@ export function LclPage({ appPassword, direction, nvoImportTariffs, openedQuote 
               placeholder="Bijv. Xiamen"
               value={quoteDetails.loadingPlace}
             />
+            <InputField
+              label="Laadadres"
+              name="loadingAddress"
+              onChange={(event) => updateQuoteDetails('loadingAddress', event.target.value)}
+              placeholder="Straat, postcode, plaats"
+              type="text"
+              value={quoteDetails.loadingAddress}
+            />
             <PortAutocomplete
               label="Loshaven"
               name="unloadingPlace"
@@ -531,6 +545,14 @@ export function LclPage({ appPassword, direction, nvoImportTariffs, openedQuote 
               options={portSuggestions.destinations}
               placeholder="Bijv. Rotterdam"
               value={quoteDetails.unloadingPlace}
+            />
+            <InputField
+              label="Losadres"
+              name="unloadingAddress"
+              onChange={(event) => updateQuoteDetails('unloadingAddress', event.target.value)}
+              placeholder="Straat, postcode, plaats"
+              type="text"
+              value={quoteDetails.unloadingAddress}
             />
             <InputField
               label="Geldigheid offerte *"

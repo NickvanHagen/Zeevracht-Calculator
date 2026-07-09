@@ -371,6 +371,15 @@ h1 {
   color: var(--accent-strong);
 }
 
+.toolbar-action-button {
+  color: var(--accent-strong);
+}
+
+.toolbar-action-button:hover,
+.toolbar-action-button:focus-visible {
+  background: var(--tab-active-bg);
+}
+
 .page-grid {
   align-items: start;
   display: grid;
@@ -919,52 +928,6 @@ h1 {
   min-height: 34px;
   padding: 0 12px;
   width: 100%;
-}
-
-.lcl-action-bar {
-  align-items: center;
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: var(--shadow);
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-}
-
-.lcl-action-bar div {
-  display: grid;
-  gap: 2px;
-}
-
-.lcl-action-bar span {
-  color: var(--muted);
-  font-size: 0.72rem;
-  font-weight: 900;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.lcl-action-bar strong {
-  color: var(--text-strong);
-}
-
-.lcl-action-bar button {
-  background: var(--accent);
-  border: 1px solid var(--accent);
-  border-radius: 7px;
-  color: #ffffff;
-  cursor: pointer;
-  font-size: 0.86rem;
-  font-weight: 900;
-  min-height: 34px;
-  padding: 0 12px;
-}
-
-.lcl-action-bar button:hover {
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
 }
 
 .pdf-action:hover {
