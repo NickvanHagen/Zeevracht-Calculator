@@ -361,6 +361,9 @@ export async function generateLclQuotePdf({
     content += `${colors.text} rg BT /F1 9 Tf ${x + 112} ${y} Td (${escapePdfText(value)}) Tj ET\n`;
     y -= 14;
   };
+  const tableText = (value: string, x: number, yPosition: number, size = 8.2, color = colors.text) => {
+    content += `${color} rg BT /F1 ${size} Tf ${x} ${yPosition} Td (${escapePdfText(value)}) Tj ET\n`;
+  };
 
   if (logo) {
     const logoWidth = 144;
@@ -391,19 +394,23 @@ export async function generateLclQuotePdf({
   y -= 10;
   text(copy.palletDetails, left, 12, 16, colors.accentStrong);
   content += `${colors.lightBlue} rg ${left} ${y - 2} 510 18 re f\n`;
-  text(`${copy.quantity}    ${copy.type}                 ${copy.dimensions}                         ${copy.weightPerItem}`, left + 8, 8, 18, colors.text);
+  content += `${colors.accent} RG 0.4 w ${left} ${y - 2} 510 18 re S\n`;
+  tableText(copy.quantity, left + 8, y + 4, 7.8, colors.muted);
+  tableText(copy.type, left + 64, y + 4, 7.8, colors.muted);
+  tableText(copy.dimensions, left + 178, y + 4, 7.8, colors.muted);
+  tableText(copy.weightPerItem, left + 430, y + 4, 7.8, colors.muted);
+  y -= 18;
   palletLines
     .filter((palletLine) => Number(palletLine.quantity) > 0)
     .forEach((palletLine) => {
-      ensureSpace(14);
+      ensureSpace(18);
       const dimensions = [palletLine.lengthCm, palletLine.widthCm, palletLine.heightCm].filter(Boolean).join(' x ');
-      text(
-        `${palletLine.quantity}         ${typeLabels[language][palletLine.type] ?? palletLine.type}                 ${dimensions} cm                         ${palletLine.weightPerItemKg || '-'} kg`,
-        left + 8,
-        8,
-        14,
-        colors.text,
-      );
+      content += `${colors.accent} RG 0.25 w ${left} ${y - 3} 510 16 re S\n`;
+      tableText(palletLine.quantity || '-', left + 8, y + 2);
+      tableText(typeLabels[language][palletLine.type] ?? palletLine.type, left + 64, y + 2);
+      tableText(dimensions ? `${dimensions} cm` : '-', left + 178, y + 2);
+      tableText(palletLine.weightPerItemKg ? `${palletLine.weightPerItemKg} kg` : '-', left + 430, y + 2);
+      y -= 16;
     });
 
   y -= 8;
@@ -417,10 +424,11 @@ export async function generateLclQuotePdf({
   if (details.note.trim()) {
     text(copy.note, left, 11, 14, colors.accentStrong);
     wrapPdfText(details.note, 105).forEach((noteLine) => text(noteLine, left, 8, 11, colors.text));
-    y -= 4;
+    y -= 12;
   }
 
-  text(`${copy.terms} ${direction === 'import' ? 'IMPORT' : 'EXPORT'}`, left, 11, 14, colors.accentStrong);
+  y -= 4;
+  text(copy.terms, left, 11, 16, colors.accentStrong);
   terms.forEach((term) => {
     wrapPdfText(`- ${term}`, 112).forEach((termLine) => {
       ensureSpace(11);
@@ -428,7 +436,7 @@ export async function generateLclQuotePdf({
     });
   });
 
-  y -= 4;
+  y -= 14;
   wrapPdfText(copy.closingText, 112).forEach((closingLine) => text(closingLine, left, 8, 10, colors.text));
   footer();
   pages.push(content);
