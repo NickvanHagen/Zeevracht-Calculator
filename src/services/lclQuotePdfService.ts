@@ -250,19 +250,26 @@ export function generateLclQuotePdf({
   let y = 802;
   const left = 42;
   const right = 553;
+  const colors = {
+    accent: '0 0.47 0.74',
+    accentStrong: '0 0.23 0.4',
+    lightBlue: '0.89 0.96 0.99',
+    muted: '0.35 0.44 0.52',
+    text: '0.09 0.20 0.29',
+  };
 
-  const text = (value: string, x: number, size = 9, lineHeight = 12) => {
-    content += `BT /F1 ${size} Tf ${x} ${y} Td (${escapePdfText(value)}) Tj ET\n`;
+  const text = (value: string, x: number, size = 9, lineHeight = 12, color = colors.text) => {
+    content += `${color} rg BT /F1 ${size} Tf ${x} ${y} Td (${escapePdfText(value)}) Tj ET\n`;
     y -= lineHeight;
   };
   const line = (yPosition: number, width = 1) => {
-    content += `0 0.47 0.74 RG ${width} w ${left} ${yPosition} m ${right} ${yPosition} l S\n`;
+    content += `${colors.accent} RG ${width} w ${left} ${yPosition} m ${right} ${yPosition} l S\n`;
   };
   const footer = () => {
     line(62, 1);
-    content += `BT /F1 8 Tf ${left} 48 Td (Team Freight Forwarding   Marconiweg 14   8501 XM Joure   Nederland) Tj ET\n`;
-    content += `BT /F1 8 Tf ${left} 36 Td (T +31 \\(0\\)513 745 220   E ocean@tfflogistics.com   W www.tfflogistics.com) Tj ET\n`;
-    content += `BT /F1 8 Tf ${left} 24 Td (KvK: 69825033   BTW: NL858027550B01) Tj ET\n`;
+    content += `${colors.text} rg BT /F1 8 Tf ${left} 48 Td (Team Freight Forwarding   Marconiweg 14   8501 XM Joure   Nederland) Tj ET\n`;
+    content += `${colors.accentStrong} rg BT /F1 8 Tf ${left} 36 Td (T +31 \\(0\\)513 745 220   E ocean@tfflogistics.com   W www.tfflogistics.com) Tj ET\n`;
+    content += `${colors.text} rg BT /F1 8 Tf ${left} 24 Td (KvK: 69825033   BTW: NL858027550B01) Tj ET\n`;
   };
   const newPage = () => {
     footer();
@@ -281,17 +288,17 @@ export function generateLclQuotePdf({
     }
 
     ensureSpace(14);
-    content += `BT /F1 8 Tf ${x} ${y} Td (${escapePdfText(label)}) Tj ET\n`;
-    content += `BT /F1 9 Tf ${x + 112} ${y} Td (${escapePdfText(value)}) Tj ET\n`;
+    content += `${colors.muted} rg BT /F1 8 Tf ${x} ${y} Td (${escapePdfText(label)}) Tj ET\n`;
+    content += `${colors.text} rg BT /F1 9 Tf ${x + 112} ${y} Td (${escapePdfText(value)}) Tj ET\n`;
     y -= 14;
   };
 
-  content += `0.89 0.96 0.99 rg ${left} 778 96 28 re f\n`;
-  content += `BT /F1 18 Tf ${left + 12} 786 Td (TFF) Tj ET\n`;
-  content += `BT /F1 13 Tf 408 790 Td (Team Freight Forwarding) Tj ET\n`;
+  content += `${colors.lightBlue} rg ${left} 778 96 28 re f\n`;
+  content += `${colors.accentStrong} rg BT /F1 18 Tf ${left + 12} 786 Td (TFF) Tj ET\n`;
+  content += `${colors.accentStrong} rg BT /F1 13 Tf 408 790 Td (Team Freight Forwarding) Tj ET\n`;
   line(770, 2);
   y = 748;
-  text(copy.lclQuote, left, 22, 24);
+  text(copy.lclQuote, left, 22, 24, colors.accentStrong);
   row(copy.quoteDate, quoteDate);
   if (quoteNumber) row(copy.quoteNumber, quoteNumber);
   row(copy.validity, formatPdfDate(details.validity, language));
@@ -307,9 +314,9 @@ export function generateLclQuotePdf({
   row(copy.loadMeters, loadMeters, 310);
 
   y -= 10;
-  text(copy.palletDetails, left, 12, 16);
-  content += `0.9 0.96 0.99 rg ${left} ${y - 2} 510 18 re f\n`;
-  text(`${copy.quantity}    ${copy.type}                 ${copy.dimensions}                         ${copy.weightPerItem}`, left + 8, 8, 18);
+  text(copy.palletDetails, left, 12, 16, colors.accentStrong);
+  content += `${colors.lightBlue} rg ${left} ${y - 2} 510 18 re f\n`;
+  text(`${copy.quantity}    ${copy.type}                 ${copy.dimensions}                         ${copy.weightPerItem}`, left + 8, 8, 18, colors.text);
   palletLines
     .filter((palletLine) => Number(palletLine.quantity) > 0)
     .forEach((palletLine) => {
@@ -320,33 +327,34 @@ export function generateLclQuotePdf({
         left + 8,
         8,
         14,
+        colors.text,
       );
     });
 
   y -= 8;
   ensureSpace(38);
-  content += `0.89 0.96 0.99 rg ${left} ${y - 22} 510 34 re f\n`;
-  content += `0 0.47 0.74 RG 1 w ${left} ${y - 22} 510 34 re S\n`;
-  content += `BT /F1 10 Tf ${left + 12} ${y - 3} Td (${escapePdfText(copy.salesPrice)}) Tj ET\n`;
-  content += `BT /F1 20 Tf 410 ${y - 7} Td (${escapePdfText(salesPrice)}) Tj ET\n`;
+  content += `${colors.lightBlue} rg ${left} ${y - 22} 510 34 re f\n`;
+  content += `${colors.accent} RG 1 w ${left} ${y - 22} 510 34 re S\n`;
+  content += `${colors.text} rg BT /F1 10 Tf ${left + 12} ${y - 3} Td (${escapePdfText(copy.salesPrice)}) Tj ET\n`;
+  content += `${colors.accentStrong} rg BT /F1 20 Tf 410 ${y - 7} Td (${escapePdfText(salesPrice)}) Tj ET\n`;
   y -= 46;
 
   if (details.note.trim()) {
-    text(copy.note, left, 11, 14);
-    wrapPdfText(details.note, 105).forEach((noteLine) => text(noteLine, left, 8, 11));
+    text(copy.note, left, 11, 14, colors.accentStrong);
+    wrapPdfText(details.note, 105).forEach((noteLine) => text(noteLine, left, 8, 11, colors.text));
     y -= 4;
   }
 
-  text(`${copy.terms} ${direction === 'import' ? 'IMPORT' : 'EXPORT'}`, left, 11, 14);
+  text(`${copy.terms} ${direction === 'import' ? 'IMPORT' : 'EXPORT'}`, left, 11, 14, colors.accentStrong);
   terms.forEach((term) => {
     wrapPdfText(`- ${term}`, 112).forEach((termLine) => {
       ensureSpace(11);
-      text(termLine, left, 7.8, 10);
+      text(termLine, left, 7.8, 10, colors.text);
     });
   });
 
   y -= 4;
-  wrapPdfText(copy.closingText, 112).forEach((closingLine) => text(closingLine, left, 8, 10));
+  wrapPdfText(copy.closingText, 112).forEach((closingLine) => text(closingLine, left, 8, 10, colors.text));
   footer();
   pages.push(content);
 
