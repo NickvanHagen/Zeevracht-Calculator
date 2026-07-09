@@ -73,7 +73,6 @@ const createPalletRow = (type: PalletType = 'europallet'): PalletRow => {
 const toNumber = (value: string) => Number(value.replace(',', '.')) || 0;
 const toText = (value: unknown) => (typeof value === 'string' ? value : '');
 const toBoolean = (value: unknown) => (typeof value === 'boolean' ? value : false);
-const toOptionalText = (value: unknown) => (typeof value === 'string' && value.trim() ? value : undefined);
 const LCL_DIESEL_STORAGE_KEY = 'tff-lcl-diesel-percentage';
 const LCL_ROAD_CHARGE_STORAGE_KEY = 'tff-lcl-road-charge-percentage';
 
@@ -250,7 +249,7 @@ export function LclPage({
     setCustomsSelected(toBoolean(formState?.customsSelected));
     setAdrSelected(toBoolean(formState?.adrSelected));
     setOceanFreight(toText(formState?.oceanFreight));
-    const restoredSalesPriceInput = toOptionalText(formState?.salesPriceInput) ?? toEditableAmount(openedQuote.salesPrice || 0);
+    const restoredSalesPriceInput = toEditableAmount(openedQuote.salesPrice || 0);
 
     setMarginPercentage(toText(formState?.marginPercentage) || String(openedQuote.marginPercentage || ''));
     setSalesPriceInput(restoredSalesPriceInput);
@@ -542,7 +541,7 @@ export function LclPage({
             quoteDetails,
             roadChargePercentage,
             rows,
-            salesPriceInput,
+            salesPriceInput: toEditableAmount(salesPrice),
           },
           loadMeters: totals.loadMeters,
           palletLines: rows,
