@@ -190,22 +190,77 @@ function wrapPdfText(value: string, maxLength: number) {
   return lines;
 }
 
-function createPdfBlob(pageContents: string[]) {
+type PdfImage = {
+  height: number;
+  hex: string;
+  width: number;
+};
+
+async function loadLogoForPdf(logoUrl: string): Promise<PdfImage | undefined> {
+  try {
+    const image = new Image();
+    image.src = logoUrl;
+    await image.decode();
+
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+
+    const context = canvas.getContext('2d');
+    if (!context) {
+      return undefined;
+    }
+
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0);
+
+    const jpegData = canvas.toDataURL('image/jpeg', 0.92).split(',')[1] ?? '';
+    const binary = atob(jpegData);
+    let hex = '';
+
+    for (let index = 0; index < binary.length; index += 1) {
+      hex += binary.charCodeAt(index).toString(16).padStart(2, '0');
+    }
+
+    return {
+      height: canvas.height,
+      hex: `${hex}>`,
+      width: canvas.width,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function createPdfBlob(pageContents: string[], logo?: PdfImage) {
   const objects: string[] = [];
-  const pageObjectIds = pageContents.map((_, index) => 4 + index * 2);
 
   objects[0] = '<< /Type /Catalog /Pages 2 0 R >>';
-  objects[1] = `<< /Type /Pages /Kids [${pageObjectIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageObjectIds.length} >>`;
+  objects[1] = '';
   objects[2] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
 
-  pageContents.forEach((content, index) => {
-    const pageObjectId = 4 + index * 2;
-    const contentObjectId = pageObjectId + 1;
+  if (logo) {
+    objects[3] =
+      `<< /Type /XObject /Subtype /Image /Width ${logo.width} /Height ${logo.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter [/ASCIIHexDecode /DCTDecode] /Length ${logo.hex.length} >>\nstream\n${logo.hex}\nendstream`;
+  }
 
-    objects[pageObjectId - 1] =
-      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentObjectId} 0 R >>`;
-    objects[contentObjectId - 1] = `<< /Length ${content.length} >>\nstream\n${content}\nendstream`;
+  const pageObjectIds: number[] = [];
+
+  pageContents.forEach((content) => {
+    const pageObjectId = objects.length + 1;
+    const contentObjectId = objects.length + 2;
+    const imageResource = logo ? ' /XObject << /Logo 4 0 R >>' : '';
+
+    pageObjectIds.push(pageObjectId);
+
+    objects.push(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >>${imageResource} >> /Contents ${contentObjectId} 0 R >>`,
+    );
+    objects.push(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
   });
+
+  objects[1] = `<< /Type /Pages /Kids [${pageObjectIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageObjectIds.length} >>`;
 
   let pdf = '%PDF-1.4\n';
   const offsets = [0];
@@ -225,10 +280,11 @@ function createPdfBlob(pageContents: string[]) {
   return new Blob([pdf], { type: 'application/pdf' });
 }
 
-export function generateLclQuotePdf({
+export async function generateLclQuotePdf({
   details,
   direction,
   language,
+  logoUrl,
   loadMeters,
   palletLines,
   quoteNumber,
@@ -244,7 +300,20 @@ export function generateLclQuotePdf({
       : direction === 'import'
         ? importTerms
         : exportTerms;
+  const popup = window.open('', '_blank');
 
+  if (!popup) {
+    window.alert(
+      language === 'en'
+        ? 'The PDF could not be opened. Please allow pop-ups for this application.'
+        : 'De PDF kon niet worden geopend. Sta pop-ups toe voor deze applicatie.',
+    );
+    return;
+  }
+
+  popup.document.write('<p style="font-family: Arial, sans-serif; color: #17324a;">PDF wordt gemaakt...</p>');
+
+  const logo = await loadLogoForPdf(logoUrl);
   const pages: string[] = [];
   let content = '';
   let y = 802;
@@ -293,8 +362,14 @@ export function generateLclQuotePdf({
     y -= 14;
   };
 
-  content += `${colors.lightBlue} rg ${left} 778 96 28 re f\n`;
-  content += `${colors.accentStrong} rg BT /F1 18 Tf ${left + 12} 786 Td (TFF) Tj ET\n`;
+  if (logo) {
+    const logoWidth = 144;
+    const logoHeight = (logo.height / logo.width) * logoWidth;
+    content += `q ${logoWidth} 0 0 ${logoHeight} ${left} ${790 - logoHeight / 2} cm /Logo Do Q\n`;
+  } else {
+    content += `${colors.lightBlue} rg ${left} 778 96 28 re f\n`;
+    content += `${colors.accentStrong} rg BT /F1 18 Tf ${left + 12} 786 Td (TFF) Tj ET\n`;
+  }
   content += `${colors.accentStrong} rg BT /F1 13 Tf 408 790 Td (Team Freight Forwarding) Tj ET\n`;
   line(770, 2);
   y = 748;
@@ -358,14 +433,6 @@ export function generateLclQuotePdf({
   footer();
   pages.push(content);
 
-  const pdfUrl = URL.createObjectURL(createPdfBlob(pages));
-  const popup = window.open(pdfUrl, '_blank');
-
-  if (!popup) {
-    window.alert(
-      language === 'en'
-        ? 'The PDF could not be opened. Please allow pop-ups for this application.'
-        : 'De PDF kon niet worden geopend. Sta pop-ups toe voor deze applicatie.',
-    );
-  }
+  const pdfUrl = URL.createObjectURL(createPdfBlob(pages, logo));
+  popup.location.href = pdfUrl;
 }
