@@ -73,6 +73,7 @@ const createPalletRow = (type: PalletType = 'europallet'): PalletRow => {
 const toNumber = (value: string) => Number(value.replace(',', '.')) || 0;
 const toText = (value: unknown) => (typeof value === 'string' ? value : '');
 const toBoolean = (value: unknown) => (typeof value === 'boolean' ? value : false);
+const toOptionalText = (value: unknown) => (typeof value === 'string' && value.trim() ? value : undefined);
 const LCL_DIESEL_STORAGE_KEY = 'tff-lcl-diesel-percentage';
 const LCL_ROAD_CHARGE_STORAGE_KEY = 'tff-lcl-road-charge-percentage';
 
@@ -249,9 +250,11 @@ export function LclPage({
     setCustomsSelected(toBoolean(formState?.customsSelected));
     setAdrSelected(toBoolean(formState?.adrSelected));
     setOceanFreight(toText(formState?.oceanFreight));
+    const restoredSalesPriceInput = toOptionalText(formState?.salesPriceInput) ?? toEditableAmount(openedQuote.salesPrice || 0);
+
     setMarginPercentage(toText(formState?.marginPercentage) || String(openedQuote.marginPercentage || ''));
-    setSalesPriceInput(toText(formState?.salesPriceInput) || toEditableAmount(openedQuote.salesPrice || 0));
-    setPricingInputMode(formState?.pricingInputMode === 'sales' ? 'sales' : 'margin');
+    setSalesPriceInput(restoredSalesPriceInput);
+    setPricingInputMode(restoredSalesPriceInput ? 'sales' : 'margin');
     setDieselPercentage(
       toText(formState?.dieselPercentage) ||
         getStoredPercentage(LCL_DIESEL_STORAGE_KEY, defaultSurcharges.dieselPercentage),
@@ -868,7 +871,7 @@ export function LclPage({
               <strong>{selectedRate ? formatCurrency(profit) : 'Op aanvraag'}</strong>
             </div>
             <div className="result-sales-control">
-              <span>Verkoopprijs</span>
+              <span>Verkoopprijs (€)</span>
               <input
                 aria-label="Verkoopprijs"
                 inputMode="decimal"
