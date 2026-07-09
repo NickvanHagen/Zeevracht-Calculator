@@ -358,7 +358,7 @@ begin
     coalesce(p_payload, '{}'::jsonb),
     null
   )
-  returning id, quote_number into v_quote_id, v_quote_number;
+  returning public.saved_quotes.id, public.saved_quotes.quote_number into v_quote_id, v_quote_number;
 
   return query select v_quote_id, v_quote_number;
 end;
