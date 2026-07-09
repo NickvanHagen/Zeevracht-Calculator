@@ -157,6 +157,7 @@ export function LclPage({ appPassword, direction, nvoImportTariffs, openedQuote 
   const [oceanFreight, setOceanFreight] = useState('');
   const [marginPercentage, setMarginPercentage] = useState('');
   const [quoteNumber, setQuoteNumber] = useState('');
+  const [savedQuoteId, setSavedQuoteId] = useState('');
   const [saveQuoteStatus, setSaveQuoteStatus] = useState('');
   const [saveQuoteError, setSaveQuoteError] = useState('');
   const [dieselPercentage, setDieselPercentage] = useState(String(defaultSurcharges.dieselPercentage));
@@ -191,6 +192,7 @@ export function LclPage({ appPassword, direction, nvoImportTariffs, openedQuote 
     const restoredQuoteDetails = formState?.quoteDetails ?? {};
     const restoredRows = formState?.rows?.map(restorePalletRow) ?? [];
 
+    setSavedQuoteId(openedQuote.id);
     setQuoteNumber(openedQuote.quoteNumber);
     setQuoteDetails({
       customerName: toText(restoredQuoteDetails.customerName) || openedQuote.customerName,
@@ -213,6 +215,21 @@ export function LclPage({ appPassword, direction, nvoImportTariffs, openedQuote 
     setSaveQuoteStatus(`Offerte ${openedQuote.quoteNumber} geopend.`);
     setSaveQuoteError('');
   }, [openedQuote]);
+
+  const startNewCalculation = () => {
+    setQuoteDetails(createQuoteDetails());
+    setRows([createPalletRow()]);
+    setCustomsSelected(false);
+    setAdrSelected(false);
+    setOceanFreight('');
+    setMarginPercentage('');
+    setQuoteNumber('');
+    setSavedQuoteId('');
+    setDieselPercentage(String(defaultSurcharges.dieselPercentage));
+    setRoadChargePercentage(String(defaultSurcharges.roadChargePercentage));
+    setSaveQuoteStatus('Nieuwe calculatie gestart.');
+    setSaveQuoteError('');
+  };
 
   const totals = useMemo(
     () =>
@@ -409,6 +426,7 @@ export function LclPage({ appPassword, direction, nvoImportTariffs, openedQuote 
         customerName: quoteDetails.customerName,
         customerReference: quoteDetails.customerReference,
         direction,
+        existingQuoteId: savedQuoteId || undefined,
         incoterms: quoteDetails.incoterms,
         loadingPlace: quoteDetails.loadingPlace,
         marginPercentage: toNumber(marginPercentage),
@@ -444,8 +462,13 @@ export function LclPage({ appPassword, direction, nvoImportTariffs, openedQuote 
         unloadingPlace: quoteDetails.unloadingPlace,
         validity: quoteDetails.validity,
       });
+      setSavedQuoteId(savedQuote.id);
       setQuoteNumber(savedQuote.quoteNumber);
-      setSaveQuoteStatus(`Offerte opgeslagen: ${savedQuote.quoteNumber}.`);
+      setSaveQuoteStatus(
+        savedQuoteId
+          ? `Offerte bijgewerkt: ${savedQuote.quoteNumber}.`
+          : `Offerte opgeslagen: ${savedQuote.quoteNumber}.`,
+      );
     } catch (error) {
       setSaveQuoteError(error instanceof Error ? error.message : 'Offerte kon niet worden opgeslagen.');
     }
@@ -454,6 +477,15 @@ export function LclPage({ appPassword, direction, nvoImportTariffs, openedQuote 
   return (
     <div className="page-grid lcl-layout">
       <div className="lcl-content">
+        <div className="lcl-action-bar">
+          <div>
+            <span>LCL calculatie</span>
+            {quoteNumber ? <strong>{quoteNumber}</strong> : <strong>Nieuwe zending</strong>}
+          </div>
+          <button onClick={startNewCalculation} type="button">
+            Nieuwe calculatie
+          </button>
+        </div>
         <SectionCard title="Offertegegevens">
           <form className="form-grid quote-form">
             <InputField

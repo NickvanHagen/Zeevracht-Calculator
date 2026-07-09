@@ -751,13 +751,13 @@ h1 {
 }
 
 .result-card {
-  padding: 16px;
+  padding: 12px;
   position: sticky;
-  top: 16px;
+  top: 10px;
 }
 
 .result-header {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .result-header p {
@@ -771,28 +771,33 @@ h1 {
 
 .result-metrics {
   display: grid;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: 6px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 8px;
 }
 
 .result-metric {
   background: var(--field-bg);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 7px;
   display: grid;
-  gap: 4px;
-  padding: 9px 10px;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 7px;
 }
 
 .result-metric span {
   color: var(--muted);
-  font-size: 0.74rem;
+  font-size: 0.62rem;
   font-weight: 800;
+  line-height: 1.1;
 }
 
 .result-metric strong {
   color: var(--text-strong);
-  font-size: 1.05rem;
+  font-size: 0.78rem;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
 }
 
 .result-metric.total {
@@ -807,18 +812,18 @@ h1 {
 
 .result-sections {
   display: grid;
-  gap: 12px;
+  gap: 7px;
 }
 
 .result-section {
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
+  border-radius: 7px;
+  padding: 6px 8px;
 }
 
 .result-section h3 {
   color: var(--accent-strong);
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   font-weight: 900;
   letter-spacing: 0.08em;
   margin: 0 0 3px;
@@ -835,9 +840,10 @@ h1 {
   border-bottom: 1px solid var(--border);
   color: var(--muted);
   display: flex;
-  gap: 14px;
+  font-size: 0.82rem;
+  gap: 10px;
   justify-content: space-between;
-  min-height: 34px;
+  min-height: 26px;
 }
 
 .summary-row strong {
@@ -847,11 +853,11 @@ h1 {
 
 .summary-row.total {
   border-bottom: 0;
-  border-top: 2px solid var(--border-strong);
+  border-top: 1px solid var(--border-strong);
   color: var(--text-strong);
-  font-size: 1.14rem;
-  margin-top: 8px;
-  padding-top: 10px;
+  font-size: 0.92rem;
+  margin-top: 4px;
+  padding-top: 5px;
 }
 
 .summary-row.total strong {
@@ -860,8 +866,8 @@ h1 {
 
 .sales-card {
   border-top: 2px solid var(--border-strong);
-  margin-top: 14px;
-  padding-top: 14px;
+  margin-top: 10px;
+  padding-top: 10px;
 }
 
 .sales-card h3 {
@@ -877,8 +883,8 @@ h1 {
   border-radius: 8px;
   display: grid;
   gap: 2px;
-  margin-bottom: 10px;
-  padding: 8px 10px;
+  margin-bottom: 8px;
+  padding: 6px 8px;
 }
 
 .quote-number-badge span {
@@ -894,13 +900,13 @@ h1 {
 }
 
 .sales-summary {
-  margin-top: 10px;
+  margin-top: 7px;
 }
 
 .pdf-actions {
   display: grid;
-  gap: 8px;
-  margin-top: 14px;
+  gap: 6px;
+  margin-top: 10px;
 }
 
 .pdf-action {
@@ -910,9 +916,55 @@ h1 {
   color: #ffffff;
   cursor: pointer;
   font-weight: 900;
-  min-height: 38px;
+  min-height: 34px;
   padding: 0 12px;
   width: 100%;
+}
+
+.lcl-action-bar {
+  align-items: center;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.lcl-action-bar div {
+  display: grid;
+  gap: 2px;
+}
+
+.lcl-action-bar span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.lcl-action-bar strong {
+  color: var(--text-strong);
+}
+
+.lcl-action-bar button {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 7px;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 0.86rem;
+  font-weight: 900;
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.lcl-action-bar button:hover {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
 }
 
 .pdf-action:hover {

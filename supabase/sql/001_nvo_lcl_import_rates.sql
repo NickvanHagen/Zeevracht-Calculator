@@ -291,8 +291,10 @@ end;
 $$;
 
 drop function if exists public.save_lcl_quote(text, text, text, text, text, text, text, text, text, numeric, numeric, numeric, jsonb);
+drop function if exists public.save_lcl_quote(text, uuid, text, text, text, text, text, text, text, text, numeric, numeric, numeric, jsonb);
 create or replace function public.save_lcl_quote(
   p_app_password text,
+  p_quote_id uuid,
   p_direction text,
   p_customer_name text,
   p_tff_reference text,
@@ -324,6 +326,34 @@ begin
 
   if nullif(trim(p_customer_name), '') is null then
     raise exception 'Klantnaam is verplicht';
+  end if;
+
+  if p_quote_id is not null then
+    update public.saved_quotes
+    set
+      direction = p_direction,
+      customer_name = trim(p_customer_name),
+      tff_reference = nullif(trim(coalesce(p_tff_reference, '')), ''),
+      customer_reference = nullif(trim(coalesce(p_customer_reference, '')), ''),
+      incoterms = p_incoterms,
+      loading_place = nullif(trim(coalesce(p_loading_place, '')), ''),
+      unloading_place = nullif(trim(coalesce(p_unloading_place, '')), ''),
+      validity = p_validity,
+      purchase_price = coalesce(p_purchase_price, 0),
+      margin_percentage = coalesce(p_margin_percentage, 0),
+      sales_price = coalesce(p_sales_price, 0),
+      payload = coalesce(p_payload, '{}'::jsonb),
+      updated_at = now()
+    where public.saved_quotes.id = p_quote_id
+      and public.saved_quotes.mode = 'lcl'
+    returning public.saved_quotes.id, public.saved_quotes.quote_number into v_quote_id, v_quote_number;
+
+    if v_quote_id is null then
+      raise exception 'Offerte niet gevonden';
+    end if;
+
+    return query select v_quote_id, v_quote_number;
+    return;
   end if;
 
   insert into public.saved_quotes (
@@ -441,11 +471,11 @@ $$;
 
 revoke all on function public.replace_nvo_lcl_import_rates(text, text, text, numeric, jsonb, jsonb) from public;
 revoke all on function public.update_nvo_lcl_import_exchange_rate(text, uuid, numeric) from public;
-revoke all on function public.save_lcl_quote(text, text, text, text, text, text, text, text, text, numeric, numeric, numeric, jsonb) from public;
+revoke all on function public.save_lcl_quote(text, uuid, text, text, text, text, text, text, text, text, numeric, numeric, numeric, jsonb) from public;
 revoke all on function public.list_saved_quotes(text) from public;
 revoke all on function public.delete_saved_quote(text, uuid) from public;
 grant execute on function public.replace_nvo_lcl_import_rates(text, text, text, numeric, jsonb, jsonb) to anon;
 grant execute on function public.update_nvo_lcl_import_exchange_rate(text, uuid, numeric) to anon;
-grant execute on function public.save_lcl_quote(text, text, text, text, text, text, text, text, text, numeric, numeric, numeric, jsonb) to anon;
+grant execute on function public.save_lcl_quote(text, uuid, text, text, text, text, text, text, text, text, numeric, numeric, numeric, jsonb) to anon;
 grant execute on function public.list_saved_quotes(text) to anon;
 grant execute on function public.delete_saved_quote(text, uuid) to anon;

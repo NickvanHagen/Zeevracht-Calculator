@@ -36,6 +36,7 @@ export type SavedQuotePayload = {
 };
 
 export type SaveQuoteInput = Omit<SavedQuote, 'createdAt' | 'createdBy' | 'id' | 'payload' | 'quoteNumber'> & {
+  existingQuoteId?: string;
   payload: SavedQuotePayload;
 };
 
@@ -97,6 +98,7 @@ export async function saveLclQuoteToSupabase(appPassword: string, quote: SaveQuo
     p_margin_percentage: quote.marginPercentage,
     p_payload: quote.payload,
     p_purchase_price: quote.purchasePrice,
+    p_quote_id: quote.existingQuoteId || null,
     p_sales_price: quote.salesPrice,
     p_tff_reference: quote.tffReference || null,
     p_unloading_place: quote.unloadingPlace || null,
