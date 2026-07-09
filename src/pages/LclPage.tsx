@@ -760,37 +760,32 @@ export function LclPage({
             {saveQuoteError ? <p className="settings-error quote-save-message">{saveQuoteError}</p> : null}
           </>
         }
+        commercialSummary={
+          <>
+            <div className="result-margin-control">
+              <span>Marge (%)</span>
+              <input
+                aria-label="Marge percentage"
+                inputMode="decimal"
+                name="marginPercentage"
+                onChange={(event) => setMarginPercentage(event.target.value)}
+                placeholder="0"
+                type="number"
+                value={marginPercentage}
+              />
+            </div>
+            <div>
+              <span>Winst</span>
+              <strong>{selectedRate ? formatCurrency(profit) : 'Op aanvraag'}</strong>
+            </div>
+          </>
+        }
         quoteNumber={quoteNumber}
         rows={resultRows}
         salesPrice={selectedRate ? formatCurrency(salesPrice) : 'Op aanvraag'}
         title="LCL overzicht"
         totalPurchase={selectedRate ? formatCurrency(totalPurchase) : 'Op aanvraag'}
-      >
-        <details className="result-section sales-card">
-          <summary>Verkoopdetails</summary>
-          <NumberInput
-            label="Marge (%)"
-            name="marginPercentage"
-            onChange={(event) => setMarginPercentage(event.target.value)}
-            placeholder="0"
-            value={marginPercentage}
-          />
-          <div className="summary-list sales-summary">
-            <div className="summary-row">
-              <span>Inkoopprijs</span>
-              <strong>{selectedRate ? formatCurrency(totalPurchase) : 'Op aanvraag'}</strong>
-            </div>
-            <div className="summary-row">
-              <span>Winst</span>
-              <strong>{selectedRate ? formatCurrency(profit) : 'Op aanvraag'}</strong>
-            </div>
-            <div className="summary-row total">
-              <span>Verkoopprijs</span>
-              <strong>{selectedRate ? formatCurrency(salesPrice) : 'Op aanvraag'}</strong>
-            </div>
-          </div>
-        </details>
-      </ResultCard>
+      />
     </div>
   );
 }

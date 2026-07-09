@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 type ResultCardProps = {
   actions?: ReactNode;
   children?: ReactNode;
+  commercialSummary?: ReactNode;
   quoteNumber?: string;
   salesPrice?: string;
   title: string;
@@ -22,7 +23,16 @@ const sectionLabels: Record<string, string> = {
 
 const defaultOpenSections = new Set(['NVO kosten', 'Transport']);
 
-export function ResultCard({ actions, children, quoteNumber, salesPrice, title, totalPurchase, rows }: ResultCardProps) {
+export function ResultCard({
+  actions,
+  children,
+  commercialSummary,
+  quoteNumber,
+  salesPrice,
+  title,
+  totalPurchase,
+  rows,
+}: ResultCardProps) {
   const primaryLabels = ['Laadmeters', 'Werkelijk gewicht', 'Betalend gewicht'];
   const primaryRows = rows.filter((row) => primaryLabels.includes(row.label));
   const detailRows = rows.filter((row) => !primaryLabels.includes(row.label) && row.section !== 'Totaal');
@@ -53,6 +63,7 @@ export function ResultCard({ actions, children, quoteNumber, salesPrice, title, 
           <span>Verkoopprijs</span>
           <strong>{salesPrice ?? '-'}</strong>
         </div>
+        {commercialSummary}
         <div>
           <span>Offertenummer</span>
           <strong>{quoteNumber || 'Nog niet opgeslagen'}</strong>
