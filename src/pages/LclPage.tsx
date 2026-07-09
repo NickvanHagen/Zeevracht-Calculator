@@ -232,6 +232,10 @@ export function LclPage({
       return;
     }
 
+    if (openedQuote) {
+      return;
+    }
+
     setQuoteDetails(createQuoteDetails());
     setRows([createPalletRow()]);
     setCustomsSelected(false);
@@ -244,7 +248,7 @@ export function LclPage({
     setRoadChargePercentage(String(defaultSurcharges.roadChargePercentage));
     setSaveQuoteStatus('Nieuwe calculatie gestart.');
     setSaveQuoteError('');
-  }, [newCalculationToken]);
+  }, [newCalculationToken, openedQuote]);
 
   const totals = useMemo(
     () =>
