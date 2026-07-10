@@ -11,3 +11,4 @@ tools/data/*.xlsx
 # OS/editor noise
 .DS_Store
 Thumbs.db
+_tmp_*

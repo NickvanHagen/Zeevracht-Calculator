@@ -3,7 +3,11 @@ import { Checkbox, InputField, NumberInput, ResultCard, SectionCard, SelectField
 import tffLogo from '../assets/tff-logo.png';
 import { customsFees } from '../config/customsFees';
 import { defaultSurcharges } from '../config/surcharges';
-import { calculateNvoLclExportFob, type NvoLclExportTariffSet } from '../pricing/nvoLclExport';
+import {
+  calculateNvoLclExportFob,
+  getNvoLclExportDestinationLabel,
+  type NvoLclExportTariffSet,
+} from '../pricing/nvoLclExport';
 import { calculateNvoLclImportFob, type NvoLclImportTariffSet } from '../pricing/nvoLclImport';
 import { getSluyterRate, sluyterFees } from '../pricing/sluyter';
 import {
@@ -105,7 +109,9 @@ function PortAutocomplete({ label, name, onChange, options, placeholder, value }
   const [isOpen, setIsOpen] = useState(false);
   const normalizedValue = value.trim().toLowerCase();
   const filteredOptions =
-    normalizedValue.length >= 2
+    isOpen && normalizedValue.length === 0
+      ? options.slice(0, 8)
+      : normalizedValue.length >= 2
       ? options
           .filter((option) => option.toLowerCase().includes(normalizedValue))
           .slice(0, 8)
@@ -144,6 +150,9 @@ function PortAutocomplete({ label, name, onChange, options, placeholder, value }
             </button>
           ))}
         </div>
+      ) : null}
+      {isOpen && value.trim().length >= 2 && filteredOptions.length === 0 ? (
+        <div className="autocomplete-menu autocomplete-empty">Geen haven gevonden</div>
       ) : null}
     </label>
   );
@@ -202,7 +211,7 @@ export function LclPage({
     } else {
       nvoExportTariffs?.rates.forEach((rate) => {
         origins.add(rate.originCfs);
-        destinations.add(rate.destinationCfs);
+        destinations.add(getNvoLclExportDestinationLabel(rate));
       });
     }
 
@@ -363,6 +372,12 @@ export function LclPage({
           tariffs: nvoExportTariffs,
         })
       : undefined;
+  const exportTariffWarning =
+    !isImport && quoteDetails.incoterms === 'FOB' && quoteDetails.unloadingPlace.trim() && !nvoExportCalculation
+      ? nvoExportTariffs
+        ? `Geen NVO LCL Export tarief gevonden voor loshaven "${quoteDetails.unloadingPlace}". Kies een haven uit de dropdown.`
+        : 'Er zijn nog geen NVO LCL Export tarieven actief. Upload eerst het exporttariefbestand bij Instellingen.'
+      : '';
   const oceanFreightAmount = toNumber(oceanFreight);
   const nvoFreightAmount = nvoCalculation?.totalEur ?? nvoExportCalculation?.totalEur ?? 0;
   const effectiveOceanFreightAmount = oceanFreightAmount + nvoFreightAmount;
@@ -697,6 +712,11 @@ export function LclPage({
               />
             </label>
           </form>
+          {exportTariffWarning ? (
+            <div className="notice-list compact-notice">
+              <p>{exportTariffWarning}</p>
+            </div>
+          ) : null}
         </SectionCard>
 
         <SectionCard

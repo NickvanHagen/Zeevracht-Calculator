@@ -1,5 +1,5 @@
 import type { WorkBook } from 'xlsx';
-import { supabase } from '../services/supabaseClient';
+import { supabase } from '../services/supabaseClient.js';
 
 export type NvoLclExportRate = {
   region: string;
@@ -74,6 +74,9 @@ const slugify = (value: string) =>
   normalize(value)
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '');
+
+export const getNvoLclExportDestinationLabel = (rate: Pick<NvoLclExportRate, 'destinationCfs' | 'transshipment'>) =>
+  rate.transshipment ? `${rate.destinationCfs} via ${rate.transshipment}` : rate.destinationCfs;
 
 const convertToEur = (amount: number, currency: string, exchangeRate: number) => {
   if (normalizeCurrency(currency) === 'USD') {
@@ -246,7 +249,15 @@ export function findNvoLclExportRate(
     return undefined;
   }
 
-  return tariffs.rates.find((rate) => normalize(rate.destinationCfs) === destinationKey);
+  return tariffs.rates.find((rate) => {
+    const destinationLabel = getNvoLclExportDestinationLabel(rate);
+
+    return (
+      normalize(rate.destinationCfs) === destinationKey ||
+      normalize(destinationLabel) === destinationKey ||
+      normalize(rate.destinationUnlo) === destinationKey
+    );
+  });
 }
 
 const calculateChargeTotal = (charge: NvoLclExportCharge, chargeableWm: number, grossWeightKg: number) => {
