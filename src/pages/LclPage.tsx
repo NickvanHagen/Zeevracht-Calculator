@@ -360,12 +360,16 @@ export function LclPage({
   const transportTotal = baseRate + roadCharge + dieselCharge;
 
   useEffect(() => {
+    if (openedQuote && savedQuoteId !== openedQuote.id) {
+      return;
+    }
+
     if (!selectedRate || pricingInputMode === 'sales') {
       return;
     }
 
     setSalesPriceInput(toEditableAmount(calculatedSalesPrice));
-  }, [calculatedSalesPrice, pricingInputMode, selectedRate]);
+  }, [calculatedSalesPrice, openedQuote, pricingInputMode, savedQuoteId, selectedRate]);
 
   useEffect(() => {
     if (!selectedRate || pricingInputMode !== 'sales' || !salesPriceInput.trim() || totalPurchase <= 0) {
