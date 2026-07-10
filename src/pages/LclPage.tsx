@@ -194,20 +194,23 @@ export function LclPage({
     const origins = new Set<string>();
     const destinations = new Set<string>();
 
-    nvoImportTariffs?.rates.forEach((rate) => {
-      origins.add(rate.originCfs);
-      destinations.add(rate.destinationCfs);
-    });
-    nvoExportTariffs?.rates.forEach((rate) => {
-      origins.add(rate.originCfs);
-      destinations.add(rate.destinationCfs);
-    });
+    if (isImport) {
+      nvoImportTariffs?.rates.forEach((rate) => {
+        origins.add(rate.originCfs);
+        destinations.add(rate.destinationCfs);
+      });
+    } else {
+      nvoExportTariffs?.rates.forEach((rate) => {
+        origins.add(rate.originCfs);
+        destinations.add(rate.destinationCfs);
+      });
+    }
 
     return {
       destinations: Array.from(destinations).sort((first, second) => first.localeCompare(second)),
       origins: Array.from(origins).sort((first, second) => first.localeCompare(second)),
     };
-  }, [nvoExportTariffs, nvoImportTariffs]);
+  }, [isImport, nvoExportTariffs, nvoImportTariffs]);
 
   const updateDieselPercentage = (value: string) => {
     setDieselPercentage(value);
@@ -227,6 +230,18 @@ export function LclPage({
   useEffect(() => {
     setCustomsSelected(false);
   }, [direction]);
+
+  useEffect(() => {
+    if (openedQuote) {
+      return;
+    }
+
+    setQuoteDetails((currentDetails) => ({
+      ...currentDetails,
+      loadingPlace: isImport ? '' : 'Rotterdam',
+      unloadingPlace: isImport ? 'Rotterdam' : '',
+    }));
+  }, [isImport, openedQuote]);
 
   useEffect(() => {
     if (!openedQuote) {
@@ -637,7 +652,7 @@ export function LclPage({
               name="loadingPlace"
               onChange={(value) => updateQuoteDetails('loadingPlace', value)}
               options={portSuggestions.origins}
-              placeholder="Bijv. Xiamen"
+              placeholder={isImport ? 'Bijv. Xiamen' : 'Rotterdam'}
               value={quoteDetails.loadingPlace}
             />
             <InputField
@@ -653,7 +668,7 @@ export function LclPage({
               name="unloadingPlace"
               onChange={(value) => updateQuoteDetails('unloadingPlace', value)}
               options={portSuggestions.destinations}
-              placeholder="Bijv. Rotterdam"
+              placeholder={isImport ? 'Bijv. Rotterdam' : 'Bijv. Sydney'}
               value={quoteDetails.unloadingPlace}
             />
             <InputField
