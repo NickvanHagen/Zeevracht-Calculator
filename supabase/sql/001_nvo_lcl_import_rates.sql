@@ -46,11 +46,52 @@ create table if not exists public.nvo_lcl_import_local_charges (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.nvo_lcl_export_rates (
+  id uuid primary key default gen_random_uuid(),
+  rate_file_id uuid not null references public.rate_files(id) on delete cascade,
+  region text,
+  country text not null,
+  destination_unlo text,
+  destination_cfs text not null,
+  transshipment text,
+  origin_cfs text not null,
+  currency text not null,
+  rate_wm numeric(12, 4) not null,
+  minimum_rate numeric(12, 4) not null,
+  frequency text,
+  transit_time text,
+  collect text,
+  imo text,
+  remark text,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.nvo_lcl_export_charges (
+  id uuid primary key default gen_random_uuid(),
+  rate_file_id uuid not null references public.rate_files(id) on delete cascade,
+  charge_key text not null,
+  label text not null,
+  country text,
+  currency text not null,
+  amount numeric(12, 4) not null,
+  basis text,
+  created_at timestamptz not null default now()
+);
+
 create index if not exists nvo_lcl_import_rates_file_origin_destination_idx
   on public.nvo_lcl_import_rates (rate_file_id, origin_cfs, destination_cfs);
 
 create index if not exists nvo_lcl_import_local_charges_file_key_idx
   on public.nvo_lcl_import_local_charges (rate_file_id, charge_key);
+
+create index if not exists nvo_lcl_export_rates_file_destination_idx
+  on public.nvo_lcl_export_rates (rate_file_id, destination_cfs);
+
+create index if not exists nvo_lcl_export_charges_file_key_idx
+  on public.nvo_lcl_export_charges (rate_file_id, charge_key);
+
+create index if not exists nvo_lcl_export_charges_file_country_idx
+  on public.nvo_lcl_export_charges (rate_file_id, country);
 
 create sequence if not exists public.saved_quote_number_seq;
 
@@ -87,6 +128,8 @@ create index if not exists saved_quotes_customer_name_idx
 alter table public.rate_files enable row level security;
 alter table public.nvo_lcl_import_rates enable row level security;
 alter table public.nvo_lcl_import_local_charges enable row level security;
+alter table public.nvo_lcl_export_rates enable row level security;
+alter table public.nvo_lcl_export_charges enable row level security;
 alter table public.app_settings enable row level security;
 alter table public.saved_quotes enable row level security;
 
@@ -125,6 +168,26 @@ create policy "nvo_lcl_import_local_charges_select_anon"
 drop policy if exists "nvo_lcl_import_local_charges_insert_anon" on public.nvo_lcl_import_local_charges;
 drop policy if exists "nvo_lcl_import_local_charges_update_anon" on public.nvo_lcl_import_local_charges;
 drop policy if exists "nvo_lcl_import_local_charges_delete_anon" on public.nvo_lcl_import_local_charges;
+
+drop policy if exists "nvo_lcl_export_rates_select_anon" on public.nvo_lcl_export_rates;
+create policy "nvo_lcl_export_rates_select_anon"
+  on public.nvo_lcl_export_rates for select
+  to anon
+  using (true);
+
+drop policy if exists "nvo_lcl_export_rates_insert_anon" on public.nvo_lcl_export_rates;
+drop policy if exists "nvo_lcl_export_rates_update_anon" on public.nvo_lcl_export_rates;
+drop policy if exists "nvo_lcl_export_rates_delete_anon" on public.nvo_lcl_export_rates;
+
+drop policy if exists "nvo_lcl_export_charges_select_anon" on public.nvo_lcl_export_charges;
+create policy "nvo_lcl_export_charges_select_anon"
+  on public.nvo_lcl_export_charges for select
+  to anon
+  using (true);
+
+drop policy if exists "nvo_lcl_export_charges_insert_anon" on public.nvo_lcl_export_charges;
+drop policy if exists "nvo_lcl_export_charges_update_anon" on public.nvo_lcl_export_charges;
+drop policy if exists "nvo_lcl_export_charges_delete_anon" on public.nvo_lcl_export_charges;
 
 drop policy if exists "saved_quotes_select_anon" on public.saved_quotes;
 drop policy if exists "saved_quotes_insert_anon" on public.saved_quotes;
@@ -286,6 +349,173 @@ begin
   where id = p_rate_file_id
     and provider = 'NVO'
     and rate_type = 'lcl_import'
+    and incoterm = 'FOB';
+end;
+$$;
+
+create or replace function public.replace_nvo_lcl_export_rates(
+  p_app_password text,
+  p_file_name text,
+  p_validity text,
+  p_exchange_rate numeric,
+  p_rates jsonb,
+  p_charges jsonb
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_rate_file_id uuid;
+begin
+  if not public.verify_tff_app_password(p_app_password) then
+    raise exception 'Onjuist wachtwoord voor tarievenbeheer' using errcode = '28000';
+  end if;
+
+  if p_exchange_rate is null or p_exchange_rate <= 0 then
+    raise exception 'Rate of exchange moet groter zijn dan 0';
+  end if;
+
+  update public.rate_files
+  set is_active = false
+  where provider = 'NVO'
+    and rate_type = 'lcl_export'
+    and incoterm = 'FOB'
+    and is_active = true;
+
+  insert into public.rate_files (
+    provider,
+    rate_type,
+    incoterm,
+    file_name,
+    validity,
+    exchange_rate,
+    is_active
+  )
+  values (
+    'NVO',
+    'lcl_export',
+    'FOB',
+    p_file_name,
+    nullif(p_validity, ''),
+    p_exchange_rate,
+    true
+  )
+  returning id into v_rate_file_id;
+
+  insert into public.nvo_lcl_export_rates (
+    rate_file_id,
+    region,
+    country,
+    destination_unlo,
+    destination_cfs,
+    transshipment,
+    origin_cfs,
+    currency,
+    rate_wm,
+    minimum_rate,
+    frequency,
+    transit_time,
+    collect,
+    imo,
+    remark
+  )
+  select
+    v_rate_file_id,
+    region,
+    country,
+    destination_unlo,
+    destination_cfs,
+    transshipment,
+    origin_cfs,
+    upper(currency),
+    rate_wm,
+    minimum_rate,
+    frequency,
+    transit_time,
+    collect,
+    imo,
+    remark
+  from jsonb_to_recordset(p_rates) as rate_rows (
+    region text,
+    country text,
+    destination_unlo text,
+    destination_cfs text,
+    transshipment text,
+    origin_cfs text,
+    currency text,
+    rate_wm numeric,
+    minimum_rate numeric,
+    frequency text,
+    transit_time text,
+    collect text,
+    imo text,
+    remark text
+  )
+  where country is not null
+    and destination_cfs is not null
+    and origin_cfs is not null
+    and rate_wm is not null
+    and rate_wm > 0;
+
+  insert into public.nvo_lcl_export_charges (
+    rate_file_id,
+    charge_key,
+    label,
+    country,
+    currency,
+    amount,
+    basis
+  )
+  select
+    v_rate_file_id,
+    charge_key,
+    label,
+    country,
+    upper(currency),
+    amount,
+    basis
+  from jsonb_to_recordset(p_charges) as charge_rows (
+    charge_key text,
+    label text,
+    country text,
+    currency text,
+    amount numeric,
+    basis text
+  )
+  where charge_key is not null
+    and label is not null
+    and amount is not null;
+
+  return v_rate_file_id;
+end;
+$$;
+
+create or replace function public.update_nvo_lcl_export_exchange_rate(
+  p_app_password text,
+  p_rate_file_id uuid,
+  p_exchange_rate numeric
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+begin
+  if not public.verify_tff_app_password(p_app_password) then
+    raise exception 'Onjuist wachtwoord voor tarievenbeheer' using errcode = '28000';
+  end if;
+
+  if p_exchange_rate is null or p_exchange_rate <= 0 then
+    raise exception 'Rate of exchange moet groter zijn dan 0';
+  end if;
+
+  update public.rate_files
+  set exchange_rate = p_exchange_rate
+  where id = p_rate_file_id
+    and provider = 'NVO'
+    and rate_type = 'lcl_export'
     and incoterm = 'FOB';
 end;
 $$;
@@ -530,12 +760,16 @@ $$;
 
 revoke all on function public.replace_nvo_lcl_import_rates(text, text, text, numeric, jsonb, jsonb) from public;
 revoke all on function public.update_nvo_lcl_import_exchange_rate(text, uuid, numeric) from public;
+revoke all on function public.replace_nvo_lcl_export_rates(text, text, text, numeric, jsonb, jsonb) from public;
+revoke all on function public.update_nvo_lcl_export_exchange_rate(text, uuid, numeric) from public;
 revoke all on function public.save_lcl_quote(text, uuid, text, text, text, text, text, text, text, text, numeric, numeric, numeric, jsonb) from public;
 revoke all on function public.list_saved_quotes(text) from public;
 revoke all on function public.get_saved_quote(text, uuid) from public;
 revoke all on function public.delete_saved_quote(text, uuid) from public;
 grant execute on function public.replace_nvo_lcl_import_rates(text, text, text, numeric, jsonb, jsonb) to anon;
 grant execute on function public.update_nvo_lcl_import_exchange_rate(text, uuid, numeric) to anon;
+grant execute on function public.replace_nvo_lcl_export_rates(text, text, text, numeric, jsonb, jsonb) to anon;
+grant execute on function public.update_nvo_lcl_export_exchange_rate(text, uuid, numeric) to anon;
 grant execute on function public.save_lcl_quote(text, uuid, text, text, text, text, text, text, text, text, numeric, numeric, numeric, jsonb) to anon;
 grant execute on function public.list_saved_quotes(text) to anon;
 grant execute on function public.get_saved_quote(text, uuid) to anon;

@@ -288,6 +288,16 @@ select {
   color: var(--accent-strong);
 }
 
+.tariff-upload.export-upload {
+  background: #f1f8ff;
+  border-color: #9bc9e8;
+}
+
+:root[data-theme='dark'] .tariff-upload.export-upload {
+  background: #102f48;
+  border-color: #3c7aa6;
+}
+
 .tariff-meta {
   background: var(--field-bg);
   border: 1px solid var(--border);

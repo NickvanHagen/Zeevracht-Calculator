@@ -3,6 +3,7 @@ import { Checkbox, InputField, NumberInput, ResultCard, SectionCard, SelectField
 import tffLogo from '../assets/tff-logo.png';
 import { customsFees } from '../config/customsFees';
 import { defaultSurcharges } from '../config/surcharges';
+import { calculateNvoLclExportFob, type NvoLclExportTariffSet } from '../pricing/nvoLclExport';
 import { calculateNvoLclImportFob, type NvoLclImportTariffSet } from '../pricing/nvoLclImport';
 import { getSluyterRate, sluyterFees } from '../pricing/sluyter';
 import {
@@ -21,6 +22,7 @@ type LclPageProps = {
   appPassword: string;
   direction: ShipmentDirection;
   newCalculationToken: number;
+  nvoExportTariffs?: NvoLclExportTariffSet;
   nvoImportTariffs?: NvoLclImportTariffSet;
   openedQuote?: SavedQuote;
 };
@@ -165,6 +167,7 @@ export function LclPage({
   appPassword,
   direction,
   newCalculationToken,
+  nvoExportTariffs,
   nvoImportTariffs,
   openedQuote,
 }: LclPageProps) {
@@ -195,12 +198,16 @@ export function LclPage({
       origins.add(rate.originCfs);
       destinations.add(rate.destinationCfs);
     });
+    nvoExportTariffs?.rates.forEach((rate) => {
+      origins.add(rate.originCfs);
+      destinations.add(rate.destinationCfs);
+    });
 
     return {
       destinations: Array.from(destinations).sort((first, second) => first.localeCompare(second)),
       origins: Array.from(origins).sort((first, second) => first.localeCompare(second)),
     };
-  }, [nvoImportTariffs]);
+  }, [nvoExportTariffs, nvoImportTariffs]);
 
   const updateDieselPercentage = (value: string) => {
     setDieselPercentage(value);
@@ -332,8 +339,17 @@ export function LclPage({
           tariffs: nvoImportTariffs,
         })
       : undefined;
+  const nvoExportCalculation =
+    !isImport && quoteDetails.incoterms === 'FOB'
+      ? calculateNvoLclExportFob({
+          cbm: totalVolumeCbm,
+          destinationCfs: quoteDetails.unloadingPlace,
+          grossWeightKg: totals.actualWeight,
+          tariffs: nvoExportTariffs,
+        })
+      : undefined;
   const oceanFreightAmount = toNumber(oceanFreight);
-  const nvoFreightAmount = nvoCalculation?.totalEur ?? 0;
+  const nvoFreightAmount = nvoCalculation?.totalEur ?? nvoExportCalculation?.totalEur ?? 0;
   const effectiveOceanFreightAmount = oceanFreightAmount + nvoFreightAmount;
   const baseRate = selectedRate?.rate ?? 0;
   const customsCharge = customsSelected
@@ -423,6 +439,20 @@ export function LclPage({
                 },
               ]
             : []),
+        ]
+      : []),
+    ...(nvoExportCalculation
+      ? [
+          {
+            label: `NVO export ocean freight (${formatNumber(nvoExportCalculation.chargeableWm)} W/M)`,
+            section: 'Zeevracht',
+            value: formatCurrency(nvoExportCalculation.oceanFreightEur),
+          },
+          ...nvoExportCalculation.charges.map((charge) => ({
+            label: charge.country ? `${charge.label} (${charge.country})` : charge.label,
+            section: 'Zeevracht',
+            value: formatCurrency(charge.totalEur),
+          })),
         ]
       : []),
     { label: 'Totaal', section: 'Zeevracht', value: formatCurrency(effectiveOceanFreightAmount), emphasis: true },

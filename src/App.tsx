@@ -5,6 +5,13 @@ import { LclPage } from './pages/LclPage';
 import { FclPage } from './pages/FclPage';
 import { QuotesDashboard } from './pages/QuotesDashboard';
 import {
+  fetchActiveNvoLclExportTariffs,
+  parseNvoLclExportTariffFile,
+  saveNvoLclExportTariffsToSupabase,
+  updateNvoLclExportExchangeRate,
+  type NvoLclExportTariffSet,
+} from './pricing/nvoLclExport';
+import {
   fetchActiveNvoLclImportTariffs,
   formatNvoValidity,
   parseNvoLclImportTariffFile,
@@ -48,7 +55,8 @@ function App() {
   const [newCalculationToken, setNewCalculationToken] = useState(0);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [nvoTariffs, setNvoTariffs] = useState<NvoLclImportTariffSet | undefined>();
+  const [nvoImportTariffs, setNvoImportTariffs] = useState<NvoLclImportTariffSet | undefined>();
+  const [nvoExportTariffs, setNvoExportTariffs] = useState<NvoLclExportTariffSet | undefined>();
   const [exchangeRate, setExchangeRate] = useState('1.144');
   const [tariffUploadError, setTariffUploadError] = useState('');
   const [tariffUploadWarning, setTariffUploadWarning] = useState('');
@@ -67,17 +75,20 @@ function App() {
     let isCurrent = true;
     setTariffStatus('Tarieven laden...');
 
-    fetchActiveNvoLclImportTariffs()
-      .then((tariffs) => {
+    Promise.all([fetchActiveNvoLclImportTariffs(), fetchActiveNvoLclExportTariffs()])
+      .then(([importTariffs, exportTariffs]) => {
         if (!isCurrent) {
           return;
         }
 
-        setNvoTariffs(tariffs);
-        if (tariffs?.exchangeRate) {
-          setExchangeRate(String(tariffs.exchangeRate));
+        setNvoImportTariffs(importTariffs);
+        setNvoExportTariffs(exportTariffs);
+        if (importTariffs?.exchangeRate) {
+          setExchangeRate(String(importTariffs.exchangeRate));
+        } else if (exportTariffs?.exchangeRate) {
+          setExchangeRate(String(exportTariffs.exchangeRate));
         }
-        setTariffStatus(tariffs ? '' : 'Nog geen actief NVO LCL Import tariefbestand gevonden.');
+        setTariffStatus(importTariffs || exportTariffs ? '' : 'Nog geen actieve NVO LCL tariefbestanden gevonden.');
       })
       .catch((error) => {
         if (!isCurrent) {
@@ -117,7 +128,7 @@ function App() {
     setSettingsOpen(false);
   };
 
-  const handleNvoTariffUpload = async (file: File | undefined) => {
+  const handleNvoImportTariffUpload = async (file: File | undefined) => {
     setTariffUploadError('');
     setTariffUploadWarning('');
 
@@ -136,7 +147,7 @@ function App() {
     }
 
     try {
-      setTariffStatus('Tarieven importeren...');
+      setTariffStatus('Importtarieven importeren...');
       const parsedExchangeRate = Number(exchangeRate.replace(',', '.')) || 1.144;
       const importedTariffs = await parseNvoLclImportTariffFile(file, parsedExchangeRate);
       const savedTariffs = await saveNvoLclImportTariffsToSupabase(
@@ -144,12 +155,48 @@ function App() {
         parsedExchangeRate,
         authenticatedPassword,
       );
-      setNvoTariffs(savedTariffs);
+      setNvoImportTariffs(savedTariffs);
       setExchangeRate(String(savedTariffs.exchangeRate));
-      setTariffStatus('Tarieven opgeslagen in Supabase.');
+      setTariffStatus('NVO LCL Import tarieven opgeslagen in Supabase.');
     } catch (error) {
       setTariffStatus('');
       setTariffUploadError(error instanceof Error ? error.message : 'Het bestand wordt niet herkend.');
+    }
+  };
+
+  const handleNvoExportTariffUpload = async (file: File | undefined) => {
+    setTariffUploadError('');
+    setTariffUploadWarning('');
+
+    if (!file) {
+      return;
+    }
+
+    if (!isSupabaseConfigured) {
+      setTariffUploadError('Supabase is nog niet ingesteld. Voeg VITE_SUPABASE_URL en VITE_SUPABASE_ANON_KEY toe.');
+      return;
+    }
+
+    if (!file.name.toLowerCase().endsWith('.xlsx')) {
+      setTariffUploadWarning('Upload alleen Excel-bestanden met extensie .xlsx.');
+      return;
+    }
+
+    try {
+      setTariffStatus('Exporttarieven importeren...');
+      const parsedExchangeRate = Number(exchangeRate.replace(',', '.')) || 1.144;
+      const importedTariffs = await parseNvoLclExportTariffFile(file, parsedExchangeRate);
+      const savedTariffs = await saveNvoLclExportTariffsToSupabase(
+        importedTariffs,
+        parsedExchangeRate,
+        authenticatedPassword,
+      );
+      setNvoExportTariffs(savedTariffs);
+      setExchangeRate(String(savedTariffs.exchangeRate));
+      setTariffStatus('NVO LCL Export tarieven opgeslagen in Supabase.');
+    } catch (error) {
+      setTariffStatus('');
+      setTariffUploadError(error instanceof Error ? error.message : 'Het exportbestand wordt niet herkend.');
     }
   };
 
@@ -162,11 +209,6 @@ function App() {
       return;
     }
 
-    if (!nvoTariffs?.id) {
-      setTariffUploadWarning('Upload eerst een NVO LCL Import tariefbestand.');
-      return;
-    }
-
     const parsedExchangeRate = Number(exchangeRate.replace(',', '.'));
 
     if (!Number.isFinite(parsedExchangeRate) || parsedExchangeRate <= 0) {
@@ -175,8 +217,26 @@ function App() {
     }
 
     try {
-      await updateNvoLclImportExchangeRate(nvoTariffs.id, parsedExchangeRate, authenticatedPassword);
-      setNvoTariffs({ ...nvoTariffs, exchangeRate: parsedExchangeRate });
+      const updates = [];
+      if (nvoImportTariffs?.id) {
+        updates.push(updateNvoLclImportExchangeRate(nvoImportTariffs.id, parsedExchangeRate, authenticatedPassword));
+      }
+      if (nvoExportTariffs?.id) {
+        updates.push(updateNvoLclExportExchangeRate(nvoExportTariffs.id, parsedExchangeRate, authenticatedPassword));
+      }
+
+      if (updates.length === 0) {
+        setTariffUploadWarning('Upload eerst een NVO LCL tariefbestand.');
+        return;
+      }
+
+      await Promise.all(updates);
+      if (nvoImportTariffs) {
+        setNvoImportTariffs({ ...nvoImportTariffs, exchangeRate: parsedExchangeRate });
+      }
+      if (nvoExportTariffs) {
+        setNvoExportTariffs({ ...nvoExportTariffs, exchangeRate: parsedExchangeRate });
+      }
       setTariffStatus('Rate of exchange opgeslagen.');
     } catch (error) {
       setTariffUploadError(error instanceof Error ? error.message : 'Rate of exchange kon niet worden opgeslagen.');
@@ -311,24 +371,45 @@ function App() {
                     ROE opslaan
                   </button>
                   <label className="tariff-upload" htmlFor="nvo-lcl-import-upload">
-                    NVO LCL Import tarieven uploaden
+                    NVO LCL IMPORT tarieven uploaden
                     <input
                       accept=".xlsx"
                       disabled={!isSupabaseConfigured}
                       id="nvo-lcl-import-upload"
                       onChange={(event) => {
-                        void handleNvoTariffUpload(event.target.files?.[0]);
+                        void handleNvoImportTariffUpload(event.target.files?.[0]);
                         event.target.value = '';
                       }}
                       type="file"
                     />
                   </label>
-                  {nvoTariffs ? (
+                  {nvoImportTariffs ? (
                     <div className="tariff-meta">
-                      <strong>{nvoTariffs.fileName}</strong>
-                      <span>{new Date(nvoTariffs.uploadedAt).toLocaleString('nl-NL')}</span>
-                      {nvoTariffs.validity ? <span>Geldig: {formatNvoValidity(nvoTariffs.validity)}</span> : null}
-                      <span>Rate of exchange: {nvoTariffs.exchangeRate}</span>
+                      <strong>Import: {nvoImportTariffs.fileName}</strong>
+                      <span>{new Date(nvoImportTariffs.uploadedAt).toLocaleString('nl-NL')}</span>
+                      {nvoImportTariffs.validity ? <span>Geldig: {formatNvoValidity(nvoImportTariffs.validity)}</span> : null}
+                      <span>Rate of exchange: {nvoImportTariffs.exchangeRate}</span>
+                    </div>
+                  ) : null}
+                  <label className="tariff-upload export-upload" htmlFor="nvo-lcl-export-upload">
+                    NVO LCL EXPORT tarieven uploaden
+                    <input
+                      accept=".xlsx"
+                      disabled={!isSupabaseConfigured}
+                      id="nvo-lcl-export-upload"
+                      onChange={(event) => {
+                        void handleNvoExportTariffUpload(event.target.files?.[0]);
+                        event.target.value = '';
+                      }}
+                      type="file"
+                    />
+                  </label>
+                  {nvoExportTariffs ? (
+                    <div className="tariff-meta">
+                      <strong>Export: {nvoExportTariffs.fileName}</strong>
+                      <span>{new Date(nvoExportTariffs.uploadedAt).toLocaleString('nl-NL')}</span>
+                      {nvoExportTariffs.validity ? <span>Geldig: {formatNvoValidity(nvoExportTariffs.validity)}</span> : null}
+                      <span>Rate of exchange: {nvoExportTariffs.exchangeRate}</span>
                     </div>
                   ) : null}
                   {tariffStatus ? <p className="settings-status">{tariffStatus}</p> : null}
@@ -351,7 +432,8 @@ function App() {
           appPassword={authenticatedPassword}
           direction={direction}
           newCalculationToken={newCalculationToken}
-          nvoImportTariffs={nvoTariffs}
+          nvoExportTariffs={nvoExportTariffs}
+          nvoImportTariffs={nvoImportTariffs}
           openedQuote={openedQuote}
         />
       ) : (
