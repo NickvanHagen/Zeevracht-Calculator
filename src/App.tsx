@@ -329,7 +329,6 @@ function App() {
           <img alt="TFF" className="brand-logo" src={tffLogo} />
           <div className="brand-copy">
             <p className="eyebrow">Team Freight Forwarding</p>
-            <h1>Transport Calculator</h1>
             <p className="header-user-name" title={currentUser.email}>{currentUser.name}</p>
           </div>
         </div>
