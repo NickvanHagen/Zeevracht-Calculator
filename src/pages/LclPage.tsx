@@ -172,6 +172,42 @@ const createQuoteDetails = (direction: ShipmentDirection): LclQuoteDetails => ({
   validity: '',
 });
 
+const DocumentIcon = () => (
+  <svg height="20" viewBox="0 0 24 24" width="20">
+    <path d="M6 3h8l4 4v14H6V3Zm7 1.8V8h3.2L13 4.8ZM8 12h8v1.8H8V12Zm0 4h6v1.8H8V16Z" fill="currentColor" />
+  </svg>
+);
+
+const BoxIcon = () => (
+  <svg height="20" viewBox="0 0 24 24" width="20">
+    <path d="m12 2 9 4.8v10.4L12 22l-9-4.8V6.8L12 2Zm0 2.2L6.4 7.1 12 10l5.6-2.9L12 4.2ZM5 8.8v7.1l6 3.2V12L5 8.8Zm14 0L13 12v7.1l6-3.2V8.8Z" fill="currentColor" />
+  </svg>
+);
+
+const ShipIcon = () => (
+  <svg height="20" viewBox="0 0 24 24" width="20">
+    <path d="M4 15 2 9h5V5h10v4h5l-2 6a7.8 7.8 0 0 1-4.3-1.3 6.4 6.4 0 0 0-7.4 0A7.8 7.8 0 0 1 4 15Zm5-6h6V7H9v2Zm-4.7 8a9.8 9.8 0 0 0 5.1-1.6 4.4 4.4 0 0 1 5.2 0 9.8 9.8 0 0 0 5.1 1.6h1.1l-.7 2h-.4a11.7 11.7 0 0 1-6.1-1.9 4.4 4.4 0 0 0-5.2 0A11.7 11.7 0 0 1 3.3 19h-.4l-.7-2h1.1Z" fill="currentColor" />
+  </svg>
+);
+
+const SaveIcon = () => (
+  <svg height="16" viewBox="0 0 24 24" width="16">
+    <path d="M5 3h12l2 2v16H5V3Zm2 2v5h9V5H7Zm2 12h6v-4H9v4Z" fill="currentColor" />
+  </svg>
+);
+
+const PdfIcon = () => (
+  <svg height="16" viewBox="0 0 24 24" width="16">
+    <path d="M6 2h8l5 5v15H6V2Zm7 1.8V8h4.2L13 3.8ZM8 13h2.4a2.2 2.2 0 0 1 0 4.4H9.5V20H8v-7Zm1.5 1.4V16h.8a.8.8 0 0 0 0-1.6h-.8Zm4 5.6v-7h2a3.5 3.5 0 0 1 0 7h-2Zm1.5-1.4h.5a2.1 2.1 0 0 0 0-4.2H15v4.2Zm4-5.6h4v1.4h-2.5v1.5h2V17h-2v3H19v-7Z" fill="currentColor" />
+  </svg>
+);
+
+const TranslateIcon = () => (
+  <svg height="16" viewBox="0 0 24 24" width="16">
+    <path d="M4 4h8v2H9.6a9.9 9.9 0 0 1-1.7 3.7c.7.6 1.4 1.1 2.2 1.5l-.9 1.8A12.2 12.2 0 0 1 6.6 11a13 13 0 0 1-3.1 2.3L2.6 11.5a9.9 9.9 0 0 0 2.7-1.9A8.8 8.8 0 0 1 4 7h2a6.2 6.2 0 0 0 .7 1.2A7.5 7.5 0 0 0 7.5 6H4V4Zm8 7h3l4 9h-2.2l-.7-1.7h-5.2l-.7 1.7H8l4-9Zm-.3 5.5h3.6L13.5 12l-1.8 4.5Z" fill="currentColor" />
+  </svg>
+);
+
 export function LclPage({
   direction,
   newCalculationToken,
@@ -467,7 +503,6 @@ export function LclPage({
         ? 'Open'
         : quoteStatus
       : quoteStatus;
-  const validityInfo = getQuoteValidityInfo(quoteDetails.validity, visibleQuoteStatus);
 
   useEffect(() => {
     if (openedQuote && savedQuoteId !== openedQuote.id) {
@@ -698,7 +733,7 @@ export function LclPage({
   return (
     <div className="page-grid lcl-layout">
       <div className="lcl-content">
-        <SectionCard title="Offertegegevens">
+        <SectionCard icon={<DocumentIcon />} title="Offertegegevens">
           <form className="form-grid quote-form">
             <InputField
               label="Klantnaam *"
@@ -767,12 +802,6 @@ export function LclPage({
               type="date"
               value={quoteDetails.validity}
             />
-            {openedQuote && quoteDetails.validity ? (
-              <div className={`validity-detail validity-${validityInfo.tone}`}>
-                <span>Geldig t/m: {validityInfo.validUntilDisplay}</span>
-                {validityInfo.message ? <strong>{validityInfo.isAutoExpired ? 'Deze offerte is verlopen' : validityInfo.message}</strong> : null}
-              </div>
-            ) : null}
             <label className="field quote-note" htmlFor="quote-note">
               <span>Opmerking / omschrijving</span>
               <textarea
@@ -792,6 +821,7 @@ export function LclPage({
         </SectionCard>
 
         <SectionCard
+          icon={<BoxIcon />}
           title="Zending invoeren"
           description="Meerdere palletformaten binnen dezelfde LCL-zending."
           headerContent={
@@ -923,6 +953,7 @@ export function LclPage({
         </SectionCard>
 
         <SectionCard
+          icon={<ShipIcon />}
           title="LCL zeevracht en transporttoeslagen"
           description="Deze LCL dieseltoeslag en kilometerheffing worden centraal opgeslagen voor iedereen."
         >
@@ -980,12 +1011,15 @@ export function LclPage({
         actions={
           <>
             <button className="pdf-action secondary" onClick={() => void saveQuote()} type="button">
+              <SaveIcon />
               Offerte opslaan
             </button>
             <button className="pdf-action" onClick={() => generateQuote('nl')} type="button">
+              <PdfIcon />
               Offerte PDF genereren
             </button>
             <button className="pdf-action secondary" onClick={() => generateQuote('en')} type="button">
+              <TranslateIcon />
               Quote PDF in English
             </button>
             {saveQuoteStatus ? <p className="settings-status quote-save-message">{saveQuoteStatus}</p> : null}
