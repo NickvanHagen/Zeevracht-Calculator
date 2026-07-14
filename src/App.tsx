@@ -324,68 +324,50 @@ function App() {
 
   return (
     <main className="app-shell">
-      <header className="app-header">
-        <div className="brand-lockup">
-          <img alt="TFF" className="brand-logo" src={tffLogo} />
-          <div className="brand-copy">
-            <p className="eyebrow">Team Freight Forwarding</p>
-            <p className="header-user-name" title={currentUser.email}>{currentUser.name}</p>
+      <header className="app-frame">
+        <div className="app-header">
+          <div className="brand-lockup">
+            <img alt="TFF" className="brand-logo" src={tffLogo} />
+            <div className="brand-copy">
+              <p className="eyebrow">Team Freight Forwarding</p>
+              <p className="header-user-name" title={currentUser.email}>{currentUser.name}</p>
+            </div>
           </div>
-        </div>
-        <div className="app-toolbar">
-          <div className="toolbar-segments">
-            <nav aria-label="Dashboard" className="tab-nav toolbar-single-nav">
-              <button
-                className={appView === 'quotes' ? 'tab-button active toolbar-action-button' : 'tab-button toolbar-action-button'}
-                onClick={() => setAppView('quotes')}
-                type="button"
-              >
-                Dashboard
-              </button>
-            </nav>
-            <nav aria-label="Calculator" className="tab-nav toolbar-single-nav">
-              <button
-                className={appView === 'calculator' ? 'tab-button active toolbar-action-button' : 'tab-button toolbar-action-button'}
-                onClick={() => setAppView('calculator')}
-                type="button"
-              >
-                Calculator
-              </button>
-            </nav>
-            {appView === 'calculator' ? (
-              <>
-                <nav aria-label="Nieuwe calculatie" className="tab-nav">
-                  <button className="tab-button toolbar-action-button" onClick={handleNewCalculation} type="button">
-                    Nieuwe calculatie
-                  </button>
-                </nav>
-                <SegmentedControl
-                  label="Transporttype"
-                  onChange={setShipmentMode}
-                  options={shipmentModeOptions}
-                  value={shipmentMode}
-                />
-                <SegmentedControl
-                  label="Richting"
-                  onChange={setDirection}
-                  options={directionOptions}
-                  value={direction}
-                />
-              </>
-            ) : null}
-          </div>
-          <div className="settings-menu">
+          <div className="app-actions">
             <button
-              aria-expanded={settingsOpen}
-              aria-haspopup="true"
-              className="settings-button"
-              onClick={() => setSettingsOpen((current) => !current)}
+              className={appView === 'calculator' ? 'top-action primary active' : 'top-action primary'}
+              onClick={() => setAppView('calculator')}
               type="button"
             >
-              Instellingen
+              <svg aria-hidden="true" height="18" viewBox="0 0 24 24" width="18">
+                <path d="M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 5h10V5H7v3Zm2 4h2v-2H9v2Zm4 0h2v-2h-2v2Zm-4 4h2v-2H9v2Zm4 0h2v-2h-2v2Z" fill="currentColor" />
+              </svg>
+              Calculator
             </button>
-            {settingsOpen ? (
-              <div className="settings-popover">
+            {appView === 'calculator' ? (
+              <button
+                className="top-action secondary"
+                onClick={handleNewCalculation}
+                type="button"
+              >
+                Nieuwe calculatie
+              </button>
+            ) : null}
+            <div className="settings-menu">
+              <button
+                aria-expanded={settingsOpen}
+                aria-haspopup="true"
+                className="top-action secondary"
+                onClick={() => setSettingsOpen((current) => !current)}
+                type="button"
+              >
+                <svg aria-hidden="true" height="18" viewBox="0 0 24 24" width="18">
+                  <path d="M19.4 13.5c.1-.5.1-1 .1-1.5s0-1-.1-1.5l2-1.5-2-3.5-2.4 1a7.4 7.4 0 0 0-2.6-1.5L14 2h-4l-.4 2.5A7.4 7.4 0 0 0 7 6L4.6 5l-2 3.5 2 1.5A8.8 8.8 0 0 0 4.5 12c0 .5 0 1 .1 1.5l-2 1.5 2 3.5 2.4-1a7.4 7.4 0 0 0 2.6 1.5L10 22h4l.4-2.5A7.4 7.4 0 0 0 17 18l2.4 1 2-3.5-2-1.5ZM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5Z" fill="currentColor" />
+                </svg>
+                Instellingen
+              </button>
+              {settingsOpen ? (
+                <div className="settings-popover">
                 <span>Weergave</span>
                 <SegmentedControl
                   label="Weergave"
@@ -468,9 +450,40 @@ function App() {
                 <button className="logout-button" onClick={handleLogout} type="button">
                   Uitloggen ({currentUser.name})
                 </button>
-              </div>
-            ) : null}
+                </div>
+              ) : null}
+            </div>
           </div>
+        </div>
+        <div className="app-nav-strip">
+          <nav aria-label="Hoofdnavigatie" className="dashboard-nav">
+            <button
+              className={appView === 'quotes' ? 'dashboard-nav-button active' : 'dashboard-nav-button'}
+              onClick={() => setAppView('quotes')}
+              type="button"
+            >
+              <svg aria-hidden="true" height="18" viewBox="0 0 24 24" width="18">
+                <path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 0h7v7h-7v-7Zm-7-7v3h3V6H6Zm9 0v3h3V6h-3ZM6 15v3h3v-3H6Zm9 0v3h3v-3h-3Z" fill="currentColor" />
+              </svg>
+              Dashboard
+            </button>
+          </nav>
+          {appView === 'calculator' ? (
+            <div className="calculator-nav-controls">
+              <SegmentedControl
+                label="Transporttype"
+                onChange={setShipmentMode}
+                options={shipmentModeOptions}
+                value={shipmentMode}
+              />
+              <SegmentedControl
+                label="Richting"
+                onChange={setDirection}
+                options={directionOptions}
+                value={direction}
+              />
+            </div>
+          ) : null}
         </div>
       </header>
 

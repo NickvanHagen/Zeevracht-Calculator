@@ -5,4 +5,5 @@ export { ResultCard } from './ResultCard';
 export { SegmentedControl } from './SegmentedControl';
 export { SectionCard } from './SectionCard';
 export { SelectField } from './SelectField';
+export { StatisticCard } from './StatisticCard';
 export { SummaryRow } from './SummaryRow';

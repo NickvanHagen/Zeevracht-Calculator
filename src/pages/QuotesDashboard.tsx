@@ -14,6 +14,7 @@ import { formatCurrency } from '../utils/formatCurrency';
 import { formatNumber } from '../utils/formatNumber';
 import { formatDisplayName } from '../utils/formatDisplayName';
 import { formatValidUntil, getDateInputValue, getQuoteValidityInfo } from '../utils/quoteValidity';
+import { StatisticCard } from '../components';
 
 type QuotesDashboardProps = {
   onOpenQuote: (quote: SavedQuote) => void;
@@ -32,8 +33,6 @@ const quoteStatuses: QuoteStatus[] = [
   'Verloren',
   'Verlopen',
 ];
-
-const openStatuses = new Set<QuoteStatus>(['Open', 'Verzonden', 'In behandeling']);
 
 const normalize = (value: string) => value.trim().toLowerCase();
 
@@ -147,22 +146,22 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
   );
 
   const kpis = useMemo(() => {
-    const openQuotes = quotes.filter((quote) => {
+    const pipelineQuotes = quotes.filter((quote) => {
       const validityInfo = getQuoteValidityInfo(quote.validUntil || quote.validity, quote.status);
 
-      return openStatuses.has(validityInfo.effectiveStatus as QuoteStatus);
+      return validityInfo.effectiveStatus !== 'Gewonnen' && validityInfo.effectiveStatus !== 'Verloren' && validityInfo.effectiveStatus !== 'Verlopen';
     });
     const wonThisMonth = quotes.filter((quote) => quote.status === 'Gewonnen' && isInCurrentMonth(quote.statusUpdatedAt));
     const lostThisMonth = quotes.filter((quote) => quote.status === 'Verloren' && isInCurrentMonth(quote.statusUpdatedAt));
     const decidedThisMonth = wonThisMonth.length + lostThisMonth.length;
     const conversion = decidedThisMonth > 0 ? (wonThisMonth.length / decidedThisMonth) * 100 : 0;
-    const quotesThisMonth = quotes.filter((quote) => isInCurrentMonth(quote.createdAt));
+    const pipelineValue = pipelineQuotes.reduce((total, quote) => total + quote.salesPrice, 0);
 
     return {
       conversion,
       lostThisMonth: lostThisMonth.length,
-      openCount: openQuotes.length,
-      quotesThisMonth: quotesThisMonth.length,
+      openCount: pipelineQuotes.length,
+      pipelineValue,
       wonThisMonth: wonThisMonth.length,
     };
   }, [quotes]);
@@ -374,34 +373,45 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
 
   return (
     <section className="dashboard-page">
-      <div className="dashboard-header">
+      <div className="dashboard-title-row">
         <div>
-          <p className="eyebrow">Team Freight Forwarding</p>
-          <h2>Offertedashboard</h2>
+          <h1>Dashboard</h1>
+          <p>Overzicht van al je offertes en prestaties.</p>
         </div>
       </div>
 
-      <div className="dashboard-kpis">
-        <div className="kpi-card">
-          <span>Open offertes</span>
-          <strong>{kpis.openCount}</strong>
-        </div>
-        <div className="kpi-card">
-          <span>Gewonnen deze maand</span>
-          <strong>{kpis.wonThisMonth}</strong>
-        </div>
-        <div className="kpi-card">
-          <span>Verloren deze maand</span>
-          <strong>{kpis.lostThisMonth}</strong>
-        </div>
-        <div className="kpi-card">
-          <span>Conversie</span>
-          <strong>{kpis.conversion.toLocaleString('nl-NL', { maximumFractionDigits: 1 })}%</strong>
-        </div>
-        <div className="kpi-card wide">
-          <span>Offertes deze maand</span>
-          <strong>{kpis.quotesThisMonth}</strong>
-        </div>
+      <div className="dashboard-kpis" aria-label="Offerte statistieken">
+        <StatisticCard
+          accent="blue"
+          icon={<svg height="24" viewBox="0 0 24 24" width="24"><path d="M7 3h7l5 5v13H7V3Zm7 1.8V9h4.2L14 4.8ZM9 13h8v2H9v-2Zm0 4h6v2H9v-2Z" fill="currentColor" /></svg>}
+          label="Open offertes"
+          value={String(kpis.openCount)}
+        />
+        <StatisticCard
+          accent="green"
+          icon={<svg height="24" viewBox="0 0 24 24" width="24"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5Zm-1 14.5-3.5-3.5L9 11.5l2 2 4.5-4.5L17 10.5l-6 6Z" fill="currentColor" /></svg>}
+          label="Gewonnen deze maand"
+          value={String(kpis.wonThisMonth)}
+        />
+        <StatisticCard
+          accent="red"
+          icon={<svg height="24" viewBox="0 0 24 24" width="24"><path d="M11 3h2v11h-2V3Zm0 14h2v4h-2v-4ZM5 5h4v2H7v10h2v2H5V5Zm10 0h4v14h-4v-2h2V7h-2V5Z" fill="currentColor" /></svg>}
+          label="Verloren deze maand"
+          value={String(kpis.lostThisMonth)}
+        />
+        <StatisticCard
+          accent="purple"
+          icon={<svg height="24" viewBox="0 0 24 24" width="24"><path d="M13 2v9h9a10 10 0 1 1-9-9Zm2 2.3V9h4.7A8.1 8.1 0 0 0 15 4.3Z" fill="currentColor" /></svg>}
+          label="Conversie"
+          value={`${kpis.conversion.toLocaleString('nl-NL', { maximumFractionDigits: 1 })}%`}
+        />
+        <StatisticCard
+          accent="orange"
+          icon={<svg height="24" viewBox="0 0 24 24" width="24"><path d="M12 3 4 7v6c0 4.5 3.4 7.5 8 8 4.6-.5 8-3.5 8-8V7l-8-4Zm0 4a3 3 0 0 1 3 3h-2a1 1 0 1 0-1 1 3 3 0 1 1-3 3h2a1 1 0 1 0 1-1 3 3 0 0 1 0-6Z" fill="currentColor" /></svg>}
+          label="Omzet in pijplijn"
+          subValue={`${kpis.openCount} ${kpis.openCount === 1 ? 'offerte' : 'offertes'}`}
+          value={formatCurrency(kpis.pipelineValue)}
+        />
       </div>
 
       <div className="dashboard-filters">
