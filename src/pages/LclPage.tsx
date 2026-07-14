@@ -21,6 +21,7 @@ import { calculateLclCosts } from '../utils/calculateLclCosts';
 import { calculateLclShipment } from '../utils/calculateLclShipment';
 import { formatCurrency } from '../utils/formatCurrency';
 import { formatNumber } from '../utils/formatNumber';
+import { getDateInputValue, getQuoteValidityInfo } from '../utils/quoteValidity';
 
 type LclPageProps = {
   direction: ShipmentDirection;
@@ -408,6 +409,13 @@ export function LclPage({
   const effectiveMarginPercentage =
     selectedRate && totalPurchase > 0 ? (profit / totalPurchase) * 100 : toNumber(marginPercentage);
   const transportTotal = baseRate + roadCharge + dieselCharge;
+  const visibleQuoteStatus =
+    quoteStatus === 'Verlopen' && getQuoteValidityInfo(quoteDetails.validity, quoteStatus).daysUntilExpiry !== undefined
+      ? getQuoteValidityInfo(quoteDetails.validity, quoteStatus).daysUntilExpiry! >= 0
+        ? 'Open'
+        : quoteStatus
+      : quoteStatus;
+  const validityInfo = getQuoteValidityInfo(quoteDetails.validity, visibleQuoteStatus);
 
   useEffect(() => {
     if (openedQuote && savedQuoteId !== openedQuote.id) {
@@ -543,7 +551,7 @@ export function LclPage({
 
   const generateQuote = (language: LclQuoteLanguage) => {
     if (!quoteDetails.customerName.trim() || !quoteDetails.incoterms.trim() || !quoteDetails.validity.trim()) {
-      window.alert('Vul minimaal Klantnaam, Incoterms en Geldigheid offerte in.');
+      window.alert('Vul minimaal Klantnaam, Incoterms en Geldig t/m in.');
       return;
     }
 
@@ -569,7 +577,7 @@ export function LclPage({
     setSaveQuoteError('');
 
     if (!quoteDetails.customerName.trim() || !quoteDetails.incoterms.trim() || !quoteDetails.validity.trim()) {
-      setSaveQuoteError('Vul minimaal Klantnaam, Incoterms en Geldigheid offerte in.');
+      setSaveQuoteError('Vul minimaal Klantnaam, Incoterms en Geldig t/m in.');
       return;
     }
 
@@ -617,9 +625,10 @@ export function LclPage({
         },
         purchasePrice: totalPurchase,
         salesPrice,
-        status: quoteStatus,
+        status: visibleQuoteStatus,
         tffReference: quoteDetails.tffReference,
         unloadingPlace: quoteDetails.unloadingPlace,
+        validUntil: getDateInputValue(quoteDetails.validity),
         validity: quoteDetails.validity,
       });
       setSavedQuoteId(savedQuote.id);
@@ -700,12 +709,18 @@ export function LclPage({
               value={quoteDetails.unloadingAddress}
             />
             <InputField
-              label="Geldigheid offerte *"
+              label="Geldig t/m *"
               name="validity"
               onChange={(event) => updateQuoteDetails('validity', event.target.value)}
               type="date"
               value={quoteDetails.validity}
             />
+            {openedQuote && quoteDetails.validity ? (
+              <div className={`validity-detail validity-${validityInfo.tone}`}>
+                <span>Geldig t/m: {validityInfo.validUntilDisplay}</span>
+                {validityInfo.message ? <strong>{validityInfo.isAutoExpired ? 'Deze offerte is verlopen' : validityInfo.message}</strong> : null}
+              </div>
+            ) : null}
             <label className="field quote-note" htmlFor="quote-note">
               <span>Opmerking / omschrijving</span>
               <textarea

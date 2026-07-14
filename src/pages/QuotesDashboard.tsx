@@ -13,13 +13,15 @@ import { generateLclQuotePdf, type LclQuoteDetails, type LclQuotePalletLine } fr
 import { formatCurrency } from '../utils/formatCurrency';
 import { formatNumber } from '../utils/formatNumber';
 import { formatDisplayName } from '../utils/formatDisplayName';
+import { formatValidUntil, getDateInputValue, getQuoteValidityInfo } from '../utils/quoteValidity';
 
 type QuotesDashboardProps = {
   onOpenQuote: (quote: SavedQuote) => void;
 };
 
-type SortKey = 'quoteNumber' | 'customerName' | 'salesPrice' | 'margin' | 'status' | 'createdAt';
+type SortKey = 'quoteNumber' | 'customerName' | 'salesPrice' | 'margin' | 'status' | 'validUntil' | 'createdAt';
 type SortDirection = 'asc' | 'desc';
+type ValidityFilter = '' | 'valid' | 'soon' | 'expired';
 
 const quoteStatuses: QuoteStatus[] = [
   'Concept',
@@ -91,6 +93,7 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
   const [quotes, setQuotes] = useState<SavedQuote[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [validityFilter, setValidityFilter] = useState<ValidityFilter>('');
   const [customerFilter, setCustomerFilter] = useState('');
   const [createdByFilter, setCreatedByFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -144,7 +147,11 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
   );
 
   const kpis = useMemo(() => {
-    const openQuotes = quotes.filter((quote) => openStatuses.has(quote.status));
+    const openQuotes = quotes.filter((quote) => {
+      const validityInfo = getQuoteValidityInfo(quote.validUntil || quote.validity, quote.status);
+
+      return openStatuses.has(validityInfo.effectiveStatus as QuoteStatus);
+    });
     const wonThisMonth = quotes.filter((quote) => quote.status === 'Gewonnen' && isInCurrentMonth(quote.statusUpdatedAt));
     const lostThisMonth = quotes.filter((quote) => quote.status === 'Verloren' && isInCurrentMonth(quote.statusUpdatedAt));
     const decidedThisMonth = wonThisMonth.length + lostThisMonth.length;
@@ -170,6 +177,16 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
         const route = getRouteParts(quote);
         const createdDate = new Date(quote.createdAt);
         const createdBy = formatDisplayName(quote.createdByLabel);
+        const validityInfo = getQuoteValidityInfo(quote.validUntil || quote.validity, quote.status);
+        const matchesValidity =
+          !validityFilter ||
+          (validityFilter === 'valid' && validityInfo.hasDate && validityInfo.daysUntilExpiry !== undefined && validityInfo.daysUntilExpiry >= 0) ||
+          (validityFilter === 'soon' &&
+            validityInfo.hasDate &&
+            validityInfo.daysUntilExpiry !== undefined &&
+            validityInfo.daysUntilExpiry >= 0 &&
+            validityInfo.daysUntilExpiry <= 3) ||
+          (validityFilter === 'expired' && validityInfo.effectiveStatus === 'Verlopen');
 
         const matchesSearch =
           !normalizedSearch ||
@@ -190,30 +207,41 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
 
         return (
           matchesSearch &&
-          (!statusFilter || quote.status === statusFilter) &&
+          (!statusFilter || validityInfo.effectiveStatus === statusFilter) &&
           (!customerFilter || quote.customerName === customerFilter) &&
           (!createdByFilter || createdBy === createdByFilter) &&
           (!fromDate || createdDate >= fromDate) &&
-          (!toDate || createdDate <= toDate)
+          (!toDate || createdDate <= toDate) &&
+          matchesValidity
         );
       })
       .sort((first, second) => {
         const directionMultiplier = sortDirection === 'asc' ? 1 : -1;
+        const firstValidity = getDateInputValue(first.validUntil || first.validity);
+        const secondValidity = getDateInputValue(second.validUntil || second.validity);
         const firstValue =
           sortKey === 'salesPrice'
             ? first.salesPrice
             : sortKey === 'margin'
               ? getQuoteMargin(first) ?? 0
+            : sortKey === 'validUntil'
+              ? firstValidity || '9999-12-31'
             : sortKey === 'createdAt'
               ? new Date(first.createdAt).getTime()
+            : sortKey === 'status'
+              ? getQuoteValidityInfo(first.validUntil || first.validity, first.status).effectiveStatus
               : first[sortKey];
         const secondValue =
           sortKey === 'salesPrice'
             ? second.salesPrice
             : sortKey === 'margin'
               ? getQuoteMargin(second) ?? 0
+            : sortKey === 'validUntil'
+              ? secondValidity || '9999-12-31'
             : sortKey === 'createdAt'
               ? new Date(second.createdAt).getTime()
+            : sortKey === 'status'
+              ? getQuoteValidityInfo(second.validUntil || second.validity, second.status).effectiveStatus
               : second[sortKey];
 
         if (typeof firstValue === 'number' && typeof secondValue === 'number') {
@@ -222,11 +250,12 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
 
         return String(firstValue).localeCompare(String(secondValue), 'nl-NL') * directionMultiplier;
       });
-  }, [createdByFilter, customerFilter, dateFrom, dateTo, quotes, searchTerm, sortDirection, sortKey, statusFilter]);
+  }, [createdByFilter, customerFilter, dateFrom, dateTo, quotes, searchTerm, sortDirection, sortKey, statusFilter, validityFilter]);
 
   const resetFilters = () => {
     setSearchTerm('');
     setStatusFilter('');
+    setValidityFilter('');
     setCustomerFilter('');
     setCreatedByFilter('');
     setDateFrom('');
@@ -408,6 +437,19 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
             ))}
           </select>
         </label>
+        <label className="field" htmlFor="quote-validity-filter">
+          <span>Geldigheid</span>
+          <select
+            id="quote-validity-filter"
+            onChange={(event) => setValidityFilter(event.target.value as ValidityFilter)}
+            value={validityFilter}
+          >
+            <option value="">Alle offertes</option>
+            <option value="valid">Nog geldig</option>
+            <option value="soon">Verloopt binnen 3 dagen</option>
+            <option value="expired">Verlopen</option>
+          </select>
+        </label>
         <label className="field" htmlFor="quote-created-by-filter">
           <span>Gemaakt door</span>
           <select id="quote-created-by-filter" onChange={(event) => setCreatedByFilter(event.target.value)} value={createdByFilter}>
@@ -455,6 +497,7 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
               <th>{renderSortableHeader('Marge', 'margin')}</th>
               <th>{renderSortableHeader('Status', 'status')}</th>
               <th>Gemaakt door</th>
+              <th>{renderSortableHeader('Geldig t/m', 'validUntil')}</th>
               <th>{renderSortableHeader('Datum', 'createdAt')}</th>
               <th>Acties</th>
             </tr>
@@ -463,6 +506,8 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
             {filteredQuotes.map((quote) => {
               const route = getRouteParts(quote);
               const margin = getQuoteMargin(quote);
+              const validityInfo = getQuoteValidityInfo(quote.validUntil || quote.validity, quote.status);
+              const effectiveStatus = validityInfo.effectiveStatus as QuoteStatus;
 
               return (
                 <tr key={quote.id}>
@@ -489,8 +534,8 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
                   </td>
                   <td>
                     <div className="status-cell compact">
-                      <span className={`quote-status-badge status-${quote.status.toLowerCase().replace(/\s+/g, '-')}`}>
-                        {quote.status}
+                      <span className={`quote-status-badge status-${effectiveStatus.toLowerCase().replace(/\s+/g, '-')}`}>
+                        {effectiveStatus}
                       </span>
                       {editingStatusQuoteId === quote.id ? (
                         <select
@@ -509,6 +554,12 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
                     </div>
                   </td>
                   <td>{formatDisplayName(quote.createdByLabel)}</td>
+                  <td>
+                    <div className={`validity-cell validity-${validityInfo.tone}`}>
+                      <strong>{formatValidUntil(quote.validUntil || quote.validity)}</strong>
+                      {validityInfo.message ? <span>{validityInfo.isAutoExpired ? 'Deze offerte is verlopen' : validityInfo.message}</span> : null}
+                    </div>
+                  </td>
                   <td>{new Date(quote.createdAt).toLocaleDateString('nl-NL')}</td>
                   <td>
                     <div className="quote-actions">

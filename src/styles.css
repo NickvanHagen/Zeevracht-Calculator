@@ -1178,7 +1178,7 @@ h1 {
   align-items: end;
   display: grid;
   gap: 10px;
-  grid-template-columns: minmax(220px, 1.4fr) repeat(5, minmax(130px, 1fr)) auto;
+  grid-template-columns: minmax(220px, 1.4fr) repeat(6, minmax(120px, 1fr)) auto;
 }
 
 .dashboard-filters .field input,
@@ -1212,7 +1212,7 @@ h1 {
 
 .quotes-table {
   border-collapse: collapse;
-  min-width: 980px;
+  min-width: 1120px;
   width: 100%;
 }
 
@@ -1301,6 +1301,45 @@ h1 {
   font-weight: 800;
   height: 30px;
   padding: 0 8px;
+}
+
+.validity-cell,
+.validity-detail {
+  display: grid;
+  gap: 2px;
+}
+
+.validity-cell strong,
+.validity-detail span {
+  color: var(--text-strong);
+}
+
+.validity-cell span,
+.validity-detail strong {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.validity-warning span,
+.validity-warning strong,
+.validity-today span,
+.validity-today strong {
+  color: #a45b00;
+}
+
+.validity-expired span,
+.validity-expired strong {
+  color: #9f1f2b;
+}
+
+.validity-detail {
+  align-self: end;
+  background: var(--field-bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  min-height: 38px;
+  padding: 7px 10px;
 }
 
 .quote-status-badge {

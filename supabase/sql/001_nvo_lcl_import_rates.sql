@@ -109,6 +109,7 @@ create table if not exists public.saved_quotes (
   loading_place text,
   unloading_place text,
   validity text not null,
+  valid_until date,
   purchase_price numeric(12, 2) not null default 0,
   margin_percentage numeric(8, 4) not null default 0,
   sales_price numeric(12, 2) not null default 0,
@@ -802,6 +803,14 @@ alter table public.saved_quotes
 alter table public.saved_quotes
   add column if not exists status_updated_at timestamptz;
 
+alter table public.saved_quotes
+  add column if not exists valid_until date;
+
+update public.saved_quotes
+set valid_until = nullif(validity, '')::date
+where valid_until is null
+  and validity ~ '^\d{4}-\d{2}-\d{2}$';
+
 update public.saved_quotes
 set quote_status = 'Open'
 where quote_status is null
@@ -1187,6 +1196,7 @@ $$;
 drop function if exists public.save_lcl_quote(text, uuid, text, text, text, text, text, text, text, text, numeric, numeric, numeric, jsonb);
 drop function if exists public.save_lcl_quote(uuid, text, text, text, text, text, text, text, text, numeric, numeric, numeric, jsonb);
 drop function if exists public.save_lcl_quote(uuid, text, text, text, text, text, text, text, text, numeric, numeric, numeric, text, jsonb);
+drop function if exists public.save_lcl_quote(uuid, text, text, text, text, text, text, text, text, numeric, numeric, numeric, text, date, jsonb);
 create or replace function public.save_lcl_quote(
   p_quote_id uuid,
   p_direction text,
@@ -1201,6 +1211,7 @@ create or replace function public.save_lcl_quote(
   p_margin_percentage numeric,
   p_sales_price numeric,
   p_quote_status text,
+  p_valid_until date,
   p_payload jsonb
 )
 returns table (id uuid, quote_number text)
@@ -1236,6 +1247,7 @@ begin
       loading_place = nullif(trim(coalesce(p_loading_place, '')), ''),
       unloading_place = nullif(trim(coalesce(p_unloading_place, '')), ''),
       validity = p_validity,
+      valid_until = p_valid_until,
       purchase_price = coalesce(p_purchase_price, 0),
       margin_percentage = coalesce(p_margin_percentage, 0),
       sales_price = coalesce(p_sales_price, 0),
@@ -1260,14 +1272,14 @@ begin
 
   insert into public.saved_quotes (
     mode, direction, customer_name, tff_reference, customer_reference, incoterms,
-    loading_place, unloading_place, validity, purchase_price, margin_percentage,
+    loading_place, unloading_place, validity, valid_until, purchase_price, margin_percentage,
     sales_price, quote_status, status_updated_at, payload, created_by, created_by_label
   )
   values (
     'lcl', p_direction, trim(p_customer_name), nullif(trim(coalesce(p_tff_reference, '')), ''),
     nullif(trim(coalesce(p_customer_reference, '')), ''), p_incoterms,
     nullif(trim(coalesce(p_loading_place, '')), ''), nullif(trim(coalesce(p_unloading_place, '')), ''),
-    p_validity, coalesce(p_purchase_price, 0), coalesce(p_margin_percentage, 0),
+    p_validity, p_valid_until, coalesce(p_purchase_price, 0), coalesce(p_margin_percentage, 0),
     coalesce(p_sales_price, 0), coalesce(nullif(p_quote_status, ''), 'Concept'), now(),
     coalesce(p_payload, '{}'::jsonb), v_user_id, v_user_label
   )
@@ -1307,13 +1319,13 @@ begin
 
   insert into public.saved_quotes (
     mode, direction, customer_name, tff_reference, customer_reference, incoterms,
-    loading_place, unloading_place, validity, purchase_price, margin_percentage,
+    loading_place, unloading_place, validity, valid_until, purchase_price, margin_percentage,
     sales_price, quote_status, status_updated_at, payload, created_by, created_by_label
   )
   values (
     v_source.mode, v_source.direction, v_source.customer_name, v_source.tff_reference,
     v_source.customer_reference, v_source.incoterms, v_source.loading_place,
-    v_source.unloading_place, v_source.validity, v_source.purchase_price,
+    v_source.unloading_place, v_source.validity, v_source.valid_until, v_source.purchase_price,
     v_source.margin_percentage, v_source.sales_price, 'Concept', now(),
     v_source.payload, v_user_id, v_user_label
   )
@@ -1329,7 +1341,7 @@ create or replace function public.list_saved_quotes()
 returns table (
   id uuid, quote_number text, mode text, direction text, customer_name text,
   tff_reference text, customer_reference text, incoterms text, loading_place text,
-  unloading_place text, validity text, purchase_price numeric, margin_percentage numeric,
+  unloading_place text, validity text, valid_until date, purchase_price numeric, margin_percentage numeric,
   sales_price numeric, payload jsonb, created_by uuid, created_by_label text,
   quote_status text, status_updated_at timestamptz, created_at timestamptz
 )
@@ -1345,7 +1357,7 @@ begin
     saved_quotes.id, saved_quotes.quote_number, saved_quotes.mode, saved_quotes.direction,
     saved_quotes.customer_name, saved_quotes.tff_reference, saved_quotes.customer_reference,
     saved_quotes.incoterms, saved_quotes.loading_place, saved_quotes.unloading_place,
-    saved_quotes.validity, saved_quotes.purchase_price, saved_quotes.margin_percentage,
+    saved_quotes.validity, saved_quotes.valid_until, saved_quotes.purchase_price, saved_quotes.margin_percentage,
     saved_quotes.sales_price, saved_quotes.payload, saved_quotes.created_by,
     coalesce(saved_quotes.created_by_label, profiles.full_name, 'Onbekend') as created_by_label,
     saved_quotes.quote_status,
@@ -1364,7 +1376,7 @@ create or replace function public.get_saved_quote(p_quote_id uuid)
 returns table (
   id uuid, quote_number text, mode text, direction text, customer_name text,
   tff_reference text, customer_reference text, incoterms text, loading_place text,
-  unloading_place text, validity text, purchase_price numeric, margin_percentage numeric,
+  unloading_place text, validity text, valid_until date, purchase_price numeric, margin_percentage numeric,
   sales_price numeric, payload jsonb, created_by uuid, created_by_label text,
   quote_status text, status_updated_at timestamptz, created_at timestamptz
 )
@@ -1380,7 +1392,7 @@ begin
     saved_quotes.id, saved_quotes.quote_number, saved_quotes.mode, saved_quotes.direction,
     saved_quotes.customer_name, saved_quotes.tff_reference, saved_quotes.customer_reference,
     saved_quotes.incoterms, saved_quotes.loading_place, saved_quotes.unloading_place,
-    saved_quotes.validity, saved_quotes.purchase_price, saved_quotes.margin_percentage,
+    saved_quotes.validity, saved_quotes.valid_until, saved_quotes.purchase_price, saved_quotes.margin_percentage,
     saved_quotes.sales_price, saved_quotes.payload, saved_quotes.created_by,
     coalesce(saved_quotes.created_by_label, profiles.full_name, 'Onbekend') as created_by_label,
     saved_quotes.quote_status,
@@ -1446,7 +1458,7 @@ revoke all on function public.replace_nvo_lcl_import_rates(text, text, numeric, 
 revoke all on function public.update_nvo_lcl_import_exchange_rate(uuid, numeric) from public, anon;
 revoke all on function public.replace_nvo_lcl_export_rates(text, text, numeric, jsonb, jsonb) from public, anon;
 revoke all on function public.update_nvo_lcl_export_exchange_rate(uuid, numeric) from public, anon;
-revoke all on function public.save_lcl_quote(uuid, text, text, text, text, text, text, text, text, numeric, numeric, numeric, text, jsonb) from public, anon;
+revoke all on function public.save_lcl_quote(uuid, text, text, text, text, text, text, text, text, numeric, numeric, numeric, text, date, jsonb) from public, anon;
 revoke all on function public.list_saved_quotes() from public, anon;
 revoke all on function public.get_saved_quote(uuid) from public, anon;
 revoke all on function public.update_saved_quote_status(uuid, text) from public, anon;
@@ -1457,7 +1469,7 @@ grant execute on function public.replace_nvo_lcl_import_rates(text, text, numeri
 grant execute on function public.update_nvo_lcl_import_exchange_rate(uuid, numeric) to authenticated;
 grant execute on function public.replace_nvo_lcl_export_rates(text, text, numeric, jsonb, jsonb) to authenticated;
 grant execute on function public.update_nvo_lcl_export_exchange_rate(uuid, numeric) to authenticated;
-grant execute on function public.save_lcl_quote(uuid, text, text, text, text, text, text, text, text, numeric, numeric, numeric, text, jsonb) to authenticated;
+grant execute on function public.save_lcl_quote(uuid, text, text, text, text, text, text, text, text, numeric, numeric, numeric, text, date, jsonb) to authenticated;
 grant execute on function public.list_saved_quotes() to authenticated;
 grant execute on function public.get_saved_quote(uuid) to authenticated;
 grant execute on function public.update_saved_quote_status(uuid, text) to authenticated;

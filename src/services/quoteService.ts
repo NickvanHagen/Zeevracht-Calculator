@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient';
 import type { ShipmentDirection, ShipmentMode } from '../types/shipment';
+import { getDateInputValue } from '../utils/quoteValidity';
 
 export type QuoteStatus =
   | 'Concept'
@@ -22,6 +23,7 @@ export type SavedQuote = {
   loadingPlace: string;
   unloadingPlace: string;
   validity: string;
+  validUntil: string;
   salesPrice: number;
   purchasePrice: number;
   marginPercentage: number;
@@ -78,6 +80,7 @@ type SavedQuoteRow = {
   tff_reference: string | null;
   unloading_place: string | null;
   validity: string;
+  valid_until?: string | null;
 };
 
 const requireSupabase = () => {
@@ -125,6 +128,7 @@ const mapSavedQuote = (row: SavedQuoteRow): SavedQuote => ({
   tffReference: row.tff_reference ?? '',
   unloadingPlace: row.unloading_place ?? '',
   validity: row.validity,
+  validUntil: row.valid_until ?? getDateInputValue(row.validity),
 });
 
 export async function saveLclQuoteToSupabase(quote: SaveQuoteInput) {
@@ -143,6 +147,7 @@ export async function saveLclQuoteToSupabase(quote: SaveQuoteInput) {
     p_sales_price: quote.salesPrice,
     p_tff_reference: quote.tffReference || null,
     p_unloading_place: quote.unloadingPlace || null,
+    p_valid_until: quote.validUntil || getDateInputValue(quote.validity) || null,
     p_validity: quote.validity,
   });
 

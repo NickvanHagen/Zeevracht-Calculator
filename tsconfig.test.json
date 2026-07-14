@@ -20,6 +20,7 @@
     "src/types/shipment.ts",
     "src/utils/calculateLclCosts.ts",
     "src/utils/calculateLclShipment.ts",
-    "src/utils/calculateLoadMeters.ts"
+    "src/utils/calculateLoadMeters.ts",
+    "src/utils/quoteValidity.ts"
   ]
 }
