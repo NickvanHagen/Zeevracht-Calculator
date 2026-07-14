@@ -365,6 +365,10 @@ function App() {
               </>
             ) : null}
           </div>
+          <div className="user-chip" title={currentUser.email}>
+            <span>Ingelogd als</span>
+            <strong>{currentUser.name}</strong>
+          </div>
           <div className="settings-menu">
             <button
               aria-expanded={settingsOpen}

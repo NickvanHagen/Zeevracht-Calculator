@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient';
 import type { User } from '@supabase/supabase-js';
+import { formatDisplayName } from '../utils/formatDisplayName';
 
 export type TffUser = {
   email: string;
@@ -24,8 +25,8 @@ export const mapAuthUser = (user: User): TffUser => ({
   id: user.id,
   name:
     typeof user.user_metadata?.full_name === 'string' && user.user_metadata.full_name.trim()
-      ? user.user_metadata.full_name.trim()
-      : user.email ?? 'TFF gebruiker',
+      ? formatDisplayName(user.user_metadata.full_name.trim())
+      : formatDisplayName(user.email ?? ''),
 });
 
 export async function getCurrentUser(): Promise<TffUser | undefined> {

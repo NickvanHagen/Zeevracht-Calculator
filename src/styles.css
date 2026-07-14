@@ -164,6 +164,34 @@ select {
   gap: 6px;
 }
 
+.user-chip {
+  align-items: center;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 1px;
+  min-height: 34px;
+  min-width: 132px;
+  padding: 4px 10px;
+}
+
+.user-chip span {
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.user-chip strong {
+  color: var(--accent-strong);
+  font-size: 0.84rem;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .settings-menu {
   position: relative;
 }
@@ -1214,6 +1242,10 @@ h1 {
   .toolbar-segments {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .user-chip {
+    width: 100%;
   }
 
   .tab-nav {

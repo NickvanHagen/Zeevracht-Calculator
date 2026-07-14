@@ -800,6 +800,47 @@ where provider = 'NVO'
 
 alter table public.profiles enable row level security;
 
+create or replace function public.format_tff_display_name(
+  p_email text,
+  p_full_name text default null
+)
+returns text
+language plpgsql
+immutable
+as $$
+declare
+  v_source text;
+  v_part text;
+  v_parts text[];
+  v_output text := '';
+begin
+  v_source := nullif(trim(coalesce(p_full_name, '')), '');
+
+  if v_source is null then
+    v_source := split_part(lower(coalesce(p_email, '')), '@', 1);
+  end if;
+
+  v_source := regexp_replace(lower(v_source), '[-_]+', ' ', 'g');
+  v_parts := regexp_split_to_array(v_source, '[\s.]+');
+
+  foreach v_part in array v_parts loop
+    if v_part = '' then
+      continue;
+    end if;
+
+    if v_part like 'van%' and length(v_part) > 3 then
+      v_output := trim(v_output || ' van ' || initcap(substring(v_part from 4)));
+    elsif v_part in ('de', 'den', 'der', 'het', 'op', 'ten', 'ter', 'van', 'vd', 'von') and v_output <> '' then
+      v_output := trim(v_output || ' ' || v_part);
+    else
+      v_output := trim(v_output || ' ' || initcap(v_part));
+    end if;
+  end loop;
+
+  return coalesce(nullif(v_output, ''), 'TFF gebruiker');
+end;
+$$;
+
 drop policy if exists "profiles_select_own" on public.profiles;
 create policy "profiles_select_own"
   on public.profiles for select
@@ -861,10 +902,9 @@ begin
     raise exception 'Alleen @tfflogistics.com e-mailadressen kunnen een account maken';
   end if;
 
-  v_full_name := coalesce(
-    nullif(trim(coalesce(new.raw_user_meta_data->>'full_name', '')), ''),
-    nullif(trim(coalesce(new.raw_user_meta_data->>'name', '')), ''),
-    split_part(lower(new.email), '@', 1)
+  v_full_name := public.format_tff_display_name(
+    new.email,
+    coalesce(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name')
   );
 
   insert into public.profiles (id, email, full_name)
@@ -911,7 +951,7 @@ begin
   end if;
 
   insert into public.profiles (id, email, full_name)
-  values (v_user_id, v_email, coalesce(v_full_name, split_part(v_email, '@', 1)))
+  values (v_user_id, v_email, public.format_tff_display_name(v_email, v_full_name))
   on conflict (id) do nothing;
 
   return v_user_id;
@@ -926,10 +966,20 @@ set search_path = public
 as $$
   select coalesce(
     (select nullif(trim(full_name), '') from public.profiles where id = public.current_tff_user_id()),
-    (select email from public.profiles where id = public.current_tff_user_id()),
+    (select public.format_tff_display_name(email, null) from public.profiles where id = public.current_tff_user_id()),
     'TFF gebruiker'
   );
 $$;
+
+update public.profiles
+set full_name = public.format_tff_display_name(email, full_name),
+    updated_at = now()
+where full_name ~ '[._-]' or lower(full_name) = full_name;
+
+update public.saved_quotes
+set created_by_label = public.format_tff_display_name(null, created_by_label)
+where created_by_label is not null
+  and (created_by_label ~ '[._-]' or lower(created_by_label) = created_by_label);
 
 drop function if exists public.replace_nvo_lcl_import_rates(text, text, text, numeric, jsonb, jsonb);
 create or replace function public.replace_nvo_lcl_import_rates(

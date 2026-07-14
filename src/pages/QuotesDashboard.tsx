@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { deleteSavedQuote, fetchSavedQuote, fetchSavedQuotes, type SavedQuote } from '../services/quoteService';
 import { formatCurrency } from '../utils/formatCurrency';
+import { formatDisplayName } from '../utils/formatDisplayName';
 
 type QuotesDashboardProps = {
   onOpenQuote: (quote: SavedQuote) => void;
@@ -153,7 +154,7 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
                 <td>
                   <strong>{formatCurrency(quote.salesPrice)}</strong>
                 </td>
-                <td>{quote.createdByLabel}</td>
+                <td>{formatDisplayName(quote.createdByLabel)}</td>
                 <td>{new Date(quote.createdAt).toLocaleDateString('nl-NL')}</td>
                 <td>
                   <div className="quote-actions">
