@@ -498,9 +498,9 @@ function App() {
       </header>
 
       {appView === 'dashboard' ? (
-        <QuotesDashboard mode="dashboard" onOpenQuote={handleOpenQuote} onShowQuotes={() => setAppView('quotes')} />
+        <QuotesDashboard currentUserEmail={currentUser.email} mode="dashboard" onOpenQuote={handleOpenQuote} onShowQuotes={() => setAppView('quotes')} />
       ) : appView === 'quotes' ? (
-        <QuotesDashboard mode="quotes" onOpenQuote={handleOpenQuote} />
+        <QuotesDashboard currentUserEmail={currentUser.email} mode="quotes" onOpenQuote={handleOpenQuote} />
       ) : shipmentMode === 'lcl' ? (
         <LclPage
           direction={direction}

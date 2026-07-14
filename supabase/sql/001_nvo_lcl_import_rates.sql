@@ -1537,3 +1537,46 @@ grant execute on function public.duplicate_saved_quote(uuid) to authenticated;
 grant execute on function public.delete_saved_quote(uuid) to authenticated;
 grant execute on function public.get_lcl_surcharges() to authenticated;
 grant execute on function public.update_lcl_surcharges(numeric, numeric) to authenticated;
+
+-- 2026-07-15: Temporary testing helper.
+-- Allows only Nick van Hagen to edit the quote creation date for dashboard/KPI testing.
+drop function if exists public.update_saved_quote_created_at(uuid, timestamptz);
+create or replace function public.update_saved_quote_created_at(
+  p_quote_id uuid,
+  p_created_at timestamptz
+)
+returns table (created_at timestamptz)
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_email text;
+begin
+  v_email := lower(coalesce(auth.jwt() ->> 'email', ''));
+
+  if v_email <> 'nick.vanhagen@tfflogistics.com' then
+    raise exception 'Geen rechten om de aanmaakdatum te wijzigen';
+  end if;
+
+  if p_created_at is null then
+    raise exception 'Aanmaakdatum is verplicht';
+  end if;
+
+  update public.saved_quotes
+  set
+    created_at = p_created_at,
+    updated_at = now()
+  where id = p_quote_id
+  returning public.saved_quotes.created_at into created_at;
+
+  if created_at is null then
+    raise exception 'Offerte niet gevonden';
+  end if;
+
+  return next;
+end;
+$$;
+
+revoke all on function public.update_saved_quote_created_at(uuid, timestamptz) from public;
+grant execute on function public.update_saved_quote_created_at(uuid, timestamptz) to authenticated;

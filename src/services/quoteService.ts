@@ -222,6 +222,24 @@ export async function updateSavedQuoteStatus(quoteId: string, status: QuoteStatu
   };
 }
 
+export async function updateSavedQuoteCreatedAt(quoteId: string, createdAt: string): Promise<{ createdAt: string }> {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc('update_saved_quote_created_at', {
+    p_created_at: createdAt,
+    p_quote_id: quoteId,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const updatedQuote = Array.isArray(data) ? data[0] : data;
+
+  return {
+    createdAt: String(updatedQuote?.created_at ?? createdAt),
+  };
+}
+
 export async function duplicateSavedQuote(quoteId: string): Promise<{ id: string; quoteNumber: string }> {
   const client = requireSupabase();
   const { data, error } = await client.rpc('duplicate_saved_quote', {

@@ -1978,6 +1978,40 @@ button.stat-card {
   margin-top: 2px;
 }
 
+.inline-date-editor {
+  display: grid;
+  gap: 3px;
+}
+
+.inline-date-editor input {
+  background: var(--field-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-strong);
+  font-size: 0.78rem;
+  font-weight: 850;
+  height: 30px;
+  max-width: 138px;
+  padding: 0 8px;
+}
+
+.inline-date-editor small {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.sr-only {
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  width: 1px;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
 .status-cell {
   display: grid;
   gap: 6px;

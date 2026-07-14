@@ -5,6 +5,7 @@ import {
   duplicateSavedQuote,
   fetchSavedQuote,
   fetchSavedQuotes,
+  updateSavedQuoteCreatedAt,
   updateSavedQuoteStatus,
   type QuoteStatus,
   type SavedQuote,
@@ -18,6 +19,7 @@ import { formatValidUntil, getDateInputValue, getQuoteValidityInfo } from '../ut
 import { StatisticCard } from '../components';
 
 type QuotesDashboardProps = {
+  currentUserEmail?: string;
   mode?: 'dashboard' | 'quotes';
   onOpenQuote: (quote: SavedQuote) => void;
   onShowQuotes?: () => void;
@@ -314,7 +316,7 @@ const TrendChart = ({ data }: { data: Array<{ date: Date; value: number }> }) =>
   );
 };
 
-export function QuotesDashboard({ mode = 'dashboard', onOpenQuote, onShowQuotes }: QuotesDashboardProps) {
+export function QuotesDashboard({ currentUserEmail = '', mode = 'dashboard', onOpenQuote, onShowQuotes }: QuotesDashboardProps) {
   const [quotes, setQuotes] = useState<SavedQuote[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -331,8 +333,10 @@ export function QuotesDashboard({ mode = 'dashboard', onOpenQuote, onShowQuotes 
   const [editingStatusQuoteId, setEditingStatusQuoteId] = useState('');
   const [openMenuQuoteId, setOpenMenuQuoteId] = useState('');
   const [updatingQuoteId, setUpdatingQuoteId] = useState('');
+  const [updatingCreatedAtQuoteId, setUpdatingCreatedAtQuoteId] = useState('');
   const [status, setStatus] = useState('Offertes laden...');
   const [error, setError] = useState('');
+  const canEditCreatedAt = currentUserEmail.trim().toLowerCase() === 'nick.vanhagen@tfflogistics.com';
 
   const applyQueryToFilters = () => {
     const params = new URLSearchParams(window.location.search);
@@ -687,6 +691,38 @@ export function QuotesDashboard({ mode = 'dashboard', onOpenQuote, onShowQuotes 
       setError(statusError instanceof Error ? statusError.message : 'Status kon niet worden bijgewerkt.');
     } finally {
       setUpdatingQuoteId('');
+    }
+  };
+
+  const handleCreatedAtChange = async (quote: SavedQuote, nextDate: string) => {
+    if (!nextDate) {
+      return;
+    }
+
+    setError('');
+    setStatus('');
+    setUpdatingCreatedAtQuoteId(quote.id);
+
+    try {
+      const currentDate = new Date(quote.createdAt);
+      const timePart = Number.isNaN(currentDate.getTime()) ? 'T09:00:00.000Z' : `T${currentDate.toISOString().slice(11)}`;
+      const { createdAt } = await updateSavedQuoteCreatedAt(quote.id, `${nextDate}${timePart}`);
+
+      setQuotes((currentQuotes) =>
+        currentQuotes.map((currentQuote) =>
+          currentQuote.id === quote.id
+            ? {
+                ...currentQuote,
+                createdAt,
+              }
+            : currentQuote,
+        ),
+      );
+      setStatus(`Testdatum aangepast voor ${quote.quoteNumber}.`);
+    } catch (createdAtError) {
+      setError(createdAtError instanceof Error ? createdAtError.message : 'Aanmaakdatum kon niet worden bijgewerkt.');
+    } finally {
+      setUpdatingCreatedAtQuoteId('');
     }
   };
 
@@ -1138,7 +1174,23 @@ export function QuotesDashboard({ mode = 'dashboard', onOpenQuote, onShowQuotes 
                       {validityInfo.message ? <span>{validityInfo.isAutoExpired ? 'Deze offerte is verlopen' : validityInfo.message}</span> : null}
                     </div>
                   </td>
-                  <td>{new Date(quote.createdAt).toLocaleDateString('nl-NL')}</td>
+                  <td>
+                    {canEditCreatedAt ? (
+                      <label className="inline-date-editor">
+                        <span className="sr-only">Aanmaakdatum aanpassen voor {quote.quoteNumber}</span>
+                        <input
+                          aria-label={`Aanmaakdatum aanpassen voor ${quote.quoteNumber}`}
+                          disabled={updatingCreatedAtQuoteId === quote.id}
+                          onChange={(event) => void handleCreatedAtChange(quote, event.target.value)}
+                          type="date"
+                          value={quote.createdAt.slice(0, 10)}
+                        />
+                        {updatingCreatedAtQuoteId === quote.id ? <small>Opslaan...</small> : null}
+                      </label>
+                    ) : (
+                      new Date(quote.createdAt).toLocaleDateString('nl-NL')
+                    )}
+                  </td>
                   <td>
                     <div className="quote-actions">
                       <button disabled={openingQuoteId === quote.id} onClick={() => void handleOpenQuote(quote)} type="button">
