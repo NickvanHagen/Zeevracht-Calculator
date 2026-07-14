@@ -23,7 +23,6 @@ import { formatCurrency } from '../utils/formatCurrency';
 import { formatNumber } from '../utils/formatNumber';
 
 type LclPageProps = {
-  appPassword: string;
   direction: ShipmentDirection;
   newCalculationToken: number;
   nvoExportTariffs?: NvoLclExportTariffSet;
@@ -175,7 +174,6 @@ const createQuoteDetails = (direction: ShipmentDirection): LclQuoteDetails => ({
 });
 
 export function LclPage({
-  appPassword,
   direction,
   newCalculationToken,
   nvoExportTariffs,
@@ -578,7 +576,7 @@ export function LclPage({
     }
 
     try {
-      const savedQuote = await saveLclQuoteToSupabase(appPassword, {
+      const savedQuote = await saveLclQuoteToSupabase({
         customerName: quoteDetails.customerName,
         customerReference: quoteDetails.customerReference,
         direction,

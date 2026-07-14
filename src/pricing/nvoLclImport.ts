@@ -489,11 +489,9 @@ export async function fetchActiveNvoLclImportTariffs(): Promise<NvoLclImportTari
 export async function saveNvoLclImportTariffsToSupabase(
   tariffs: NvoLclImportTariffSet,
   exchangeRate: number,
-  appPassword: string,
 ): Promise<NvoLclImportTariffSet> {
   const client = requireSupabase();
   const { data: rateFileId, error: replaceError } = await client.rpc('replace_nvo_lcl_import_rates', {
-    p_app_password: appPassword,
     p_exchange_rate: exchangeRate,
     p_file_name: tariffs.fileName,
     p_local_charges: chargesToJson(tariffs),
@@ -545,11 +543,9 @@ const chargesToJson = (tariffs: NvoLclImportTariffSet) =>
 export async function updateNvoLclImportExchangeRate(
   rateFileId: string,
   exchangeRate: number,
-  appPassword: string,
 ) {
   const client = requireSupabase();
   const { error } = await client.rpc('update_nvo_lcl_import_exchange_rate', {
-    p_app_password: appPassword,
     p_exchange_rate: exchangeRate,
     p_rate_file_id: rateFileId,
   });

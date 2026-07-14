@@ -99,6 +99,40 @@ select {
   font-size: 1.45rem;
 }
 
+.auth-mode-switch {
+  background: var(--control-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: 1fr 1fr;
+  padding: 4px;
+}
+
+.auth-mode-switch button {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 900;
+  min-height: 34px;
+}
+
+.auth-mode-switch button.active {
+  background: var(--tab-active-bg);
+  box-shadow: 0 6px 16px rgba(0, 91, 150, 0.1);
+  color: var(--accent-strong);
+}
+
+.login-help {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 750;
+  line-height: 1.35;
+  margin: -4px 0 0;
+}
+
 .login-error {
   color: #d0343f;
   font-size: 0.88rem;

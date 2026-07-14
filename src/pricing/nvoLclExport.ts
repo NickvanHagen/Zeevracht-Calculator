@@ -48,7 +48,7 @@ export type NvoLclExportCalculation = {
 
 const DEFAULT_EXCHANGE_RATE = 1.144;
 const RATE_FILE_FILTER = {
-  incoterm: 'FOB',
+  incoterm: 'CFR',
   provider: 'NVO',
   rate_type: 'lcl_export',
 };
@@ -552,11 +552,9 @@ const chargesToJson = (tariffs: NvoLclExportTariffSet) =>
 export async function saveNvoLclExportTariffsToSupabase(
   tariffs: NvoLclExportTariffSet,
   exchangeRate: number,
-  appPassword: string,
 ): Promise<NvoLclExportTariffSet> {
   const client = requireSupabase();
   const { data: rateFileId, error: replaceError } = await client.rpc('replace_nvo_lcl_export_rates', {
-    p_app_password: appPassword,
     p_charges: chargesToJson(tariffs),
     p_exchange_rate: exchangeRate,
     p_file_name: tariffs.fileName,
@@ -593,11 +591,9 @@ export async function saveNvoLclExportTariffsToSupabase(
 export async function updateNvoLclExportExchangeRate(
   rateFileId: string,
   exchangeRate: number,
-  appPassword: string,
 ) {
   const client = requireSupabase();
   const { error } = await client.rpc('update_nvo_lcl_export_exchange_rate', {
-    p_app_password: appPassword,
     p_exchange_rate: exchangeRate,
     p_rate_file_id: rateFileId,
   });

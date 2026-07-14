@@ -19,13 +19,17 @@ import {
   updateNvoLclImportExchangeRate,
   type NvoLclImportTariffSet,
 } from './pricing/nvoLclImport';
+import {
+  getCurrentUser,
+  signInTffUser,
+  signOutTffUser,
+  signUpTffUser,
+  type TffUser,
+} from './services/authService';
 import { isSupabaseConfigured } from './services/supabaseClient';
 import type { SavedQuote } from './services/quoteService';
 import type { ShipmentDirection, ShipmentMode } from './types/shipment';
 import tffLogo from './assets/tff-logo.png';
-
-const SESSION_AUTH_KEY = 'tff-calculator-authenticated';
-const SESSION_PASSWORD_KEY = 'tff-calculator-password';
 
 const shipmentModeOptions: Array<{ value: ShipmentMode; label: string }> = [
   { value: 'lcl', label: 'LCL' },
@@ -38,15 +42,13 @@ const directionOptions: Array<{ value: ShipmentDirection; label: string }> = [
 ];
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(
-    () =>
-      sessionStorage.getItem(SESSION_AUTH_KEY) === 'true' &&
-      Boolean(sessionStorage.getItem(SESSION_PASSWORD_KEY)),
-  );
+  const [currentUser, setCurrentUser] = useState<TffUser | undefined>();
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authStatus, setAuthStatus] = useState('');
+  const [email, setEmail] = useState('');
+  const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
-  const [authenticatedPassword, setAuthenticatedPassword] = useState(
-    () => sessionStorage.getItem(SESSION_PASSWORD_KEY) ?? '',
-  );
   const [loginError, setLoginError] = useState('');
   const [shipmentMode, setShipmentMode] = useState<ShipmentMode>('lcl');
   const [direction, setDirection] = useState<ShipmentDirection>('import');
@@ -67,7 +69,7 @@ function App() {
   }, [theme]);
 
   useEffect(() => {
-    if (!isSupabaseConfigured) {
+    if (!isSupabaseConfigured || !currentUser) {
       setTariffStatus('');
       return;
     }
@@ -102,29 +104,59 @@ function App() {
     return () => {
       isCurrent = false;
     };
-  }, []);
+  }, [currentUser]);
 
-  const handleLogin = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    if (password === import.meta.env.VITE_APP_PASSWORD) {
-      sessionStorage.setItem(SESSION_AUTH_KEY, 'true');
-      sessionStorage.setItem(SESSION_PASSWORD_KEY, password);
-      setAuthenticatedPassword(password);
-      setIsAuthenticated(true);
-      setLoginError('');
-      setPassword('');
+  useEffect(() => {
+    if (!isSupabaseConfigured) {
+      setAuthLoading(false);
       return;
     }
 
-    setLoginError('Onjuist wachtwoord');
+    let isCurrent = true;
+
+    getCurrentUser()
+      .then((user) => {
+        if (isCurrent) {
+          setCurrentUser(user);
+        }
+      })
+      .finally(() => {
+        if (isCurrent) {
+          setAuthLoading(false);
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
+
+  const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setLoginError('');
+    setAuthStatus('');
+
+    try {
+      const user =
+        authMode === 'login'
+          ? await signInTffUser(email, password)
+          : await signUpTffUser({ email, name: fullName, password });
+
+      if (user) {
+        setCurrentUser(user);
+      } else {
+        setAuthStatus('Account aangemaakt. Controleer je e-mail om je account te bevestigen.');
+      }
+      setPassword('');
+      return;
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : 'Inloggen is niet gelukt.');
+    }
   };
 
-  const handleLogout = () => {
-    sessionStorage.removeItem(SESSION_AUTH_KEY);
-    sessionStorage.removeItem(SESSION_PASSWORD_KEY);
-    setAuthenticatedPassword('');
-    setIsAuthenticated(false);
+  const handleLogout = async () => {
+    await signOutTffUser();
+    setCurrentUser(undefined);
     setSettingsOpen(false);
   };
 
@@ -153,7 +185,6 @@ function App() {
       const savedTariffs = await saveNvoLclImportTariffsToSupabase(
         importedTariffs,
         parsedExchangeRate,
-        authenticatedPassword,
       );
       setNvoImportTariffs(savedTariffs);
       setExchangeRate(String(savedTariffs.exchangeRate));
@@ -189,7 +220,6 @@ function App() {
       const savedTariffs = await saveNvoLclExportTariffsToSupabase(
         importedTariffs,
         parsedExchangeRate,
-        authenticatedPassword,
       );
       setNvoExportTariffs(savedTariffs);
       setExchangeRate(String(savedTariffs.exchangeRate));
@@ -219,10 +249,10 @@ function App() {
     try {
       const updates = [];
       if (nvoImportTariffs?.id) {
-        updates.push(updateNvoLclImportExchangeRate(nvoImportTariffs.id, parsedExchangeRate, authenticatedPassword));
+        updates.push(updateNvoLclImportExchangeRate(nvoImportTariffs.id, parsedExchangeRate));
       }
       if (nvoExportTariffs?.id) {
-        updates.push(updateNvoLclExportExchangeRate(nvoExportTariffs.id, parsedExchangeRate, authenticatedPassword));
+        updates.push(updateNvoLclExportExchangeRate(nvoExportTariffs.id, parsedExchangeRate));
       }
 
       if (updates.length === 0) {
@@ -257,25 +287,70 @@ function App() {
     setNewCalculationToken((currentToken) => currentToken + 1);
   };
 
-  if (!isAuthenticated) {
+  if (authLoading) {
+    return (
+      <main className="login-shell">
+        <div className="login-card">
+          <img alt="TFF" className="login-logo" src={tffLogo} />
+          <h1>Team Freight Forwarding</h1>
+          <p className="settings-status">Sessie controleren...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!currentUser) {
     return (
       <main className="login-shell">
         <form className="login-card" onSubmit={handleLogin}>
           <img alt="TFF" className="login-logo" src={tffLogo} />
           <h1>Team Freight Forwarding</h1>
-          <label className="field" htmlFor="app-password">
+          <div className="auth-mode-switch">
+            <button className={authMode === 'login' ? 'active' : ''} onClick={() => setAuthMode('login')} type="button">
+              Inloggen
+            </button>
+            <button className={authMode === 'signup' ? 'active' : ''} onClick={() => setAuthMode('signup')} type="button">
+              Account maken
+            </button>
+          </div>
+          {authMode === 'signup' ? (
+            <label className="field" htmlFor="full-name">
+              <span>Naam</span>
+              <input
+                autoComplete="name"
+                id="full-name"
+                onChange={(event) => setFullName(event.target.value)}
+                type="text"
+                value={fullName}
+              />
+            </label>
+          ) : null}
+          <label className="field" htmlFor="user-email">
+            <span>E-mail</span>
+            <input
+              autoComplete="email"
+              id="user-email"
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="naam@tfflogistics.com"
+              type="email"
+              value={email}
+            />
+          </label>
+          <label className="field" htmlFor="user-password">
             <span>Wachtwoord</span>
             <input
-              autoComplete="current-password"
-              id="app-password"
+              autoComplete={authMode === 'login' ? 'current-password' : 'new-password'}
+              id="user-password"
               onChange={(event) => setPassword(event.target.value)}
               type="password"
               value={password}
             />
           </label>
+          <p className="login-help">Alleen e-mailadressen die eindigen op @tfflogistics.com kunnen een account maken.</p>
           {loginError ? <p className="login-error">{loginError}</p> : null}
+          {authStatus ? <p className="settings-status">{authStatus}</p> : null}
           <button className="login-button" type="submit">
-            Inloggen
+            {authMode === 'login' ? 'Inloggen' : 'Account maken'}
           </button>
         </form>
       </main>
@@ -417,7 +492,7 @@ function App() {
                   {tariffUploadError ? <p className="settings-error">{tariffUploadError}</p> : null}
                 </section>
                 <button className="logout-button" onClick={handleLogout} type="button">
-                  Uitloggen
+                  Uitloggen ({currentUser.name})
                 </button>
               </div>
             ) : null}
@@ -426,10 +501,9 @@ function App() {
       </header>
 
       {appView === 'quotes' ? (
-        <QuotesDashboard appPassword={authenticatedPassword} onOpenQuote={handleOpenQuote} />
+        <QuotesDashboard onOpenQuote={handleOpenQuote} />
       ) : shipmentMode === 'lcl' ? (
         <LclPage
-          appPassword={authenticatedPassword}
           direction={direction}
           newCalculationToken={newCalculationToken}
           nvoExportTariffs={nvoExportTariffs}

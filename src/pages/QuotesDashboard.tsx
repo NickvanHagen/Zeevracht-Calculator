@@ -3,11 +3,10 @@ import { deleteSavedQuote, fetchSavedQuote, fetchSavedQuotes, type SavedQuote } 
 import { formatCurrency } from '../utils/formatCurrency';
 
 type QuotesDashboardProps = {
-  appPassword: string;
   onOpenQuote: (quote: SavedQuote) => void;
 };
 
-export function QuotesDashboard({ appPassword, onOpenQuote }: QuotesDashboardProps) {
+export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
   const [quotes, setQuotes] = useState<SavedQuote[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [openingQuoteId, setOpeningQuoteId] = useState('');
@@ -19,7 +18,7 @@ export function QuotesDashboard({ appPassword, onOpenQuote }: QuotesDashboardPro
     setStatus('Offertes laden...');
     setError('');
 
-    fetchSavedQuotes(appPassword)
+    fetchSavedQuotes()
       .then((savedQuotes) => {
         if (!isCurrent) {
           return;
@@ -40,7 +39,7 @@ export function QuotesDashboard({ appPassword, onOpenQuote }: QuotesDashboardPro
     return () => {
       isCurrent = false;
     };
-  }, [appPassword]);
+  }, []);
 
   const filteredQuotes = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -75,7 +74,7 @@ export function QuotesDashboard({ appPassword, onOpenQuote }: QuotesDashboardPro
     setStatus('');
 
     try {
-      await deleteSavedQuote(appPassword, quote.id);
+      await deleteSavedQuote(quote.id);
       setQuotes((currentQuotes) => currentQuotes.filter((currentQuote) => currentQuote.id !== quote.id));
       setStatus('Offerte verwijderd.');
     } catch (deleteError) {
@@ -89,7 +88,7 @@ export function QuotesDashboard({ appPassword, onOpenQuote }: QuotesDashboardPro
     setOpeningQuoteId(quote.id);
 
     try {
-      const fullQuote = await fetchSavedQuote(appPassword, quote.id);
+      const fullQuote = await fetchSavedQuote(quote.id);
       onOpenQuote(fullQuote);
     } catch (openError) {
       setError(openError instanceof Error ? openError.message : 'Offerte kon niet worden geopend.');
@@ -130,6 +129,7 @@ export function QuotesDashboard({ appPassword, onOpenQuote }: QuotesDashboardPro
               <th>Havens</th>
               <th>Incoterms</th>
               <th>Verkoopprijs</th>
+              <th>Gemaakt door</th>
               <th>Datum</th>
               <th>Acties</th>
             </tr>
@@ -153,6 +153,7 @@ export function QuotesDashboard({ appPassword, onOpenQuote }: QuotesDashboardPro
                 <td>
                   <strong>{formatCurrency(quote.salesPrice)}</strong>
                 </td>
+                <td>{quote.createdByLabel}</td>
                 <td>{new Date(quote.createdAt).toLocaleDateString('nl-NL')}</td>
                 <td>
                   <div className="quote-actions">

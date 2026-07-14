@@ -18,6 +18,7 @@ export type SavedQuote = {
   marginPercentage: number;
   createdAt: string;
   createdBy: string | null;
+  createdByLabel: string;
   payload: SavedQuotePayload;
 };
 
@@ -37,7 +38,7 @@ export type SavedQuotePayload = {
   [key: string]: unknown;
 };
 
-export type SaveQuoteInput = Omit<SavedQuote, 'createdAt' | 'createdBy' | 'id' | 'payload' | 'quoteNumber'> & {
+export type SaveQuoteInput = Omit<SavedQuote, 'createdAt' | 'createdBy' | 'createdByLabel' | 'id' | 'payload' | 'quoteNumber'> & {
   existingQuoteId?: string;
   payload: SavedQuotePayload;
 };
@@ -45,6 +46,7 @@ export type SaveQuoteInput = Omit<SavedQuote, 'createdAt' | 'createdBy' | 'id' |
 type SavedQuoteRow = {
   created_at: string;
   created_by: string | null;
+  created_by_label: string | null;
   customer_name: string;
   customer_reference: string | null;
   direction: ShipmentDirection;
@@ -89,6 +91,7 @@ const normalizePayload = (payload: SavedQuotePayload | string | null): SavedQuot
 const mapSavedQuote = (row: SavedQuoteRow): SavedQuote => ({
   createdAt: row.created_at,
   createdBy: row.created_by,
+  createdByLabel: row.created_by_label ?? 'Onbekend',
   customerName: row.customer_name,
   customerReference: row.customer_reference ?? '',
   direction: row.direction,
@@ -106,10 +109,9 @@ const mapSavedQuote = (row: SavedQuoteRow): SavedQuote => ({
   validity: row.validity,
 });
 
-export async function saveLclQuoteToSupabase(appPassword: string, quote: SaveQuoteInput) {
+export async function saveLclQuoteToSupabase(quote: SaveQuoteInput) {
   const client = requireSupabase();
   const { data, error } = await client.rpc('save_lcl_quote', {
-    p_app_password: appPassword,
     p_customer_name: quote.customerName,
     p_customer_reference: quote.customerReference || null,
     p_direction: quote.direction,
@@ -137,11 +139,9 @@ export async function saveLclQuoteToSupabase(appPassword: string, quote: SaveQuo
   };
 }
 
-export async function fetchSavedQuotes(appPassword: string): Promise<SavedQuote[]> {
+export async function fetchSavedQuotes(): Promise<SavedQuote[]> {
   const client = requireSupabase();
-  const { data, error } = await client.rpc('list_saved_quotes', {
-    p_app_password: appPassword,
-  });
+  const { data, error } = await client.rpc('list_saved_quotes');
 
   if (error) {
     throw new Error(error.message);
@@ -150,10 +150,9 @@ export async function fetchSavedQuotes(appPassword: string): Promise<SavedQuote[
   return (data ?? []).map(mapSavedQuote);
 }
 
-export async function fetchSavedQuote(appPassword: string, quoteId: string): Promise<SavedQuote> {
+export async function fetchSavedQuote(quoteId: string): Promise<SavedQuote> {
   const client = requireSupabase();
   const { data, error } = await client.rpc('get_saved_quote', {
-    p_app_password: appPassword,
     p_quote_id: quoteId,
   });
 
@@ -170,10 +169,9 @@ export async function fetchSavedQuote(appPassword: string, quoteId: string): Pro
   return mapSavedQuote(savedQuote as SavedQuoteRow);
 }
 
-export async function deleteSavedQuote(appPassword: string, quoteId: string) {
+export async function deleteSavedQuote(quoteId: string) {
   const client = requireSupabase();
   const { error } = await client.rpc('delete_saved_quote', {
-    p_app_password: appPassword,
     p_quote_id: quoteId,
   });
 
