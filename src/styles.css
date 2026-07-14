@@ -1243,7 +1243,7 @@ h1 {
 
 .dashboard-page {
   display: grid;
-  gap: 22px;
+  gap: 14px;
   margin: 0 auto;
   max-width: 1600px;
   width: 100%;
@@ -1254,12 +1254,12 @@ h1 {
   display: flex;
   gap: 16px;
   justify-content: space-between;
-  padding: 26px 2px 6px;
+  padding: 10px 2px 2px;
 }
 
 .dashboard-title-row h1 {
   color: var(--text-strong);
-  font-size: clamp(1.8rem, 2.4vw, 2.35rem);
+  font-size: clamp(1.55rem, 2vw, 2rem);
   letter-spacing: -0.02em;
   line-height: 1.1;
   margin: 0;
@@ -1267,15 +1267,15 @@ h1 {
 
 .dashboard-title-row p {
   color: var(--muted);
-  font-size: 0.95rem;
+  font-size: 0.88rem;
   font-weight: 650;
-  margin: 6px 0 0;
+  margin: 4px 0 0;
 }
 
 .dashboard-kpis {
   display: grid;
-  gap: 16px;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
 .quotes-page {
@@ -1335,10 +1335,10 @@ h1 {
   border-radius: 14px;
   box-shadow: 0 18px 45px rgba(0, 67, 120, 0.08);
   display: grid;
-  gap: 14px;
-  min-height: 164px;
+  gap: 10px;
+  min-height: 126px;
   overflow: hidden;
-  padding: 22px;
+  padding: 16px;
   position: relative;
   text-align: left;
 }
@@ -1380,10 +1380,10 @@ button.stat-card {
   align-items: center;
   border-radius: 14px;
   display: inline-flex;
-  height: 52px;
+  height: 42px;
   justify-content: center;
   position: relative;
-  width: 56px;
+  width: 46px;
   z-index: 1;
 }
 
@@ -1397,14 +1397,14 @@ button.stat-card {
 
 .stat-copy span {
   color: var(--muted);
-  font-size: 0.84rem;
+  font-size: 0.78rem;
   font-weight: 900;
   line-height: 1.2;
 }
 
 .stat-copy strong {
   color: var(--text-strong);
-  font-size: clamp(1.85rem, 2.4vw, 2.28rem);
+  font-size: clamp(1.45rem, 1.8vw, 1.85rem);
   letter-spacing: -0.025em;
   line-height: 1.15;
 }
@@ -1416,10 +1416,10 @@ button.stat-card {
 }
 
 .stat-sparkline {
-  bottom: 14px;
+  bottom: 10px;
   color: currentColor;
-  height: 38px;
-  opacity: 0.55;
+  height: 28px;
+  opacity: 0.48;
   position: absolute;
   right: 18px;
   width: 43%;
@@ -1483,7 +1483,7 @@ button.stat-card {
 
 .dashboard-insights {
   display: grid;
-  gap: 16px;
+  gap: 12px;
   grid-template-columns: 1.45fr 1fr 1fr 1.1fr;
 }
 
@@ -1495,15 +1495,15 @@ button.stat-card {
   border-radius: 14px;
   box-shadow: 0 16px 38px rgba(0, 67, 120, 0.065);
   display: grid;
-  gap: 12px;
-  min-height: 164px;
-  padding: 22px;
+  gap: 10px;
+  min-height: 260px;
+  padding: 16px;
   position: relative;
   text-align: left;
 }
 
 .insight-card-wide {
-  min-height: 240px;
+  min-height: 260px;
 }
 
 .insight-card-header {
@@ -1525,9 +1525,9 @@ button.stat-card {
 .insight-card-header strong {
   color: var(--text-strong);
   display: block;
-  font-size: clamp(1.35rem, 1.8vw, 1.75rem);
+  font-size: clamp(1.2rem, 1.5vw, 1.55rem);
   letter-spacing: -0.02em;
-  margin-top: 8px;
+  margin-top: 5px;
 }
 
 .insight-card small,
@@ -1586,7 +1586,7 @@ button.stat-card {
 
 .dashboard-trend-chart {
   color: var(--accent);
-  height: 128px;
+  height: 106px;
   margin-top: auto;
   width: 100%;
 }
@@ -1686,6 +1686,10 @@ button.stat-card {
   border-left: 4px solid #ec8a00;
 }
 
+.insight-warning > small {
+  display: none;
+}
+
 .urgent-list {
   display: grid;
   gap: 8px;
@@ -1707,6 +1711,8 @@ button.stat-card {
   display: grid;
   gap: 8px;
   grid-template-columns: 1fr auto;
+  min-height: 54px;
+  padding: 9px 10px;
 }
 
 .urgent-row:hover,
@@ -1718,6 +1724,22 @@ button.stat-card {
 .urgent-row strong,
 .urgent-row small {
   display: block;
+}
+
+.urgent-row strong {
+  color: var(--text-strong);
+  font-size: 0.82rem;
+  letter-spacing: 0;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.urgent-row small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.25;
+  margin-top: 2px;
 }
 
 .urgent-row > span:last-child {
@@ -1765,18 +1787,27 @@ button.stat-card {
 
 .largest-quote-meta {
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .largest-quote-meta span {
   color: var(--text);
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   font-weight: 850;
+}
+
+.largest-quote-card > strong {
+  font-size: 1.25rem;
+  line-height: 1.15;
+}
+
+.largest-quote-card > small {
+  font-size: 0.76rem;
 }
 
 .activity-list {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .activity-list p {
@@ -1788,24 +1819,30 @@ button.stat-card {
 .activity-row {
   align-items: center;
   display: grid;
-  gap: 8px;
-  grid-template-columns: 58px 1fr auto;
+  gap: 7px;
+  grid-template-columns: 48px 1fr auto;
+  min-height: 48px;
+  padding: 9px 10px;
   text-align: left;
 }
 
 .activity-row span {
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
 }
 
 .activity-row strong {
-  font-size: 0.9rem;
+  color: var(--text-strong);
+  font-size: 0.78rem;
+  line-height: 1.2;
   margin: 0;
 }
 
 .activity-row small {
   grid-column: 2;
-  margin-top: -8px;
+  font-size: 0.7rem;
+  line-height: 1.2;
+  margin-top: -5px;
 }
 
 .activity-chevron {
