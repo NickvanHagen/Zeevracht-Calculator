@@ -327,9 +327,10 @@ function App() {
       <header className="app-header">
         <div className="brand-lockup">
           <img alt="TFF" className="brand-logo" src={tffLogo} />
-          <div>
+          <div className="brand-copy">
             <p className="eyebrow">Team Freight Forwarding</p>
             <h1>Transport Calculator</h1>
+            <p className="header-user-name" title={currentUser.email}>{currentUser.name}</p>
           </div>
         </div>
         <div className="app-toolbar">
@@ -364,10 +365,6 @@ function App() {
                 />
               </>
             ) : null}
-          </div>
-          <div className="user-chip" title={currentUser.email}>
-            <span>Ingelogd als</span>
-            <strong>{currentUser.name}</strong>
           </div>
           <div className="settings-menu">
             <button
