@@ -1207,7 +1207,7 @@ h1 {
 .quotes-table-wrap {
   border: 1px solid var(--border);
   border-radius: 8px;
-  overflow-x: auto;
+  overflow: visible;
 }
 
 .quotes-table {
@@ -1285,6 +1285,10 @@ h1 {
   display: grid;
   gap: 6px;
   min-width: 148px;
+}
+
+.status-cell.compact {
+  min-width: 132px;
 }
 
 .status-cell select {
@@ -1368,7 +1372,7 @@ h1 {
   cursor: pointer;
   font-size: 0.78rem;
   font-weight: 900;
-  min-height: 30px;
+  min-height: 34px;
   padding: 0 9px;
 }
 
@@ -1385,8 +1389,8 @@ h1 {
   align-items: center;
   display: inline-flex;
   justify-content: center;
-  min-width: 30px;
-  width: 30px;
+  min-width: 36px;
+  width: 36px;
 }
 
 .quote-menu {
@@ -1399,12 +1403,12 @@ h1 {
   border-radius: 8px;
   box-shadow: var(--shadow);
   display: grid;
-  min-width: 140px;
+  min-width: 168px;
   padding: 6px;
   position: absolute;
   right: 0;
   top: calc(100% + 6px);
-  z-index: 20;
+  z-index: 80;
 }
 
 .quote-menu-popover button {
@@ -1529,6 +1533,10 @@ h1 {
   .dashboard-kpis,
   .dashboard-filters {
     grid-template-columns: 1fr;
+  }
+
+  .quotes-table-wrap {
+    overflow-x: auto;
   }
 
   .section-heading {

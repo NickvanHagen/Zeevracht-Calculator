@@ -4,6 +4,7 @@ import {
   duplicateSavedQuote,
   fetchSavedQuote,
   fetchSavedQuotes,
+  updateSavedQuoteStatus,
   type QuoteStatus,
   type SavedQuote,
 } from '../services/quoteService';
@@ -99,7 +100,9 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
   const [openingQuoteId, setOpeningQuoteId] = useState('');
   const [duplicatingQuoteId, setDuplicatingQuoteId] = useState('');
   const [deleteCandidate, setDeleteCandidate] = useState<SavedQuote | undefined>();
+  const [editingStatusQuoteId, setEditingStatusQuoteId] = useState('');
   const [openMenuQuoteId, setOpenMenuQuoteId] = useState('');
+  const [updatingQuoteId, setUpdatingQuoteId] = useState('');
   const [status, setStatus] = useState('Offertes laden...');
   const [error, setError] = useState('');
 
@@ -252,6 +255,32 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
       setError(deleteError instanceof Error ? deleteError.message : 'Offerte kon niet worden verwijderd.');
     } finally {
       setDeleteCandidate(undefined);
+    }
+  };
+
+  const handleStatusChange = async (quote: SavedQuote, nextStatus: QuoteStatus) => {
+    setError('');
+    setStatus('');
+    setUpdatingQuoteId(quote.id);
+
+    try {
+      const { statusUpdatedAt } = await updateSavedQuoteStatus(quote.id, nextStatus);
+      setQuotes((currentQuotes) =>
+        currentQuotes.map((currentQuote) =>
+          currentQuote.id === quote.id
+            ? {
+                ...currentQuote,
+                status: nextStatus,
+                statusUpdatedAt,
+              }
+            : currentQuote,
+        ),
+      );
+      setEditingStatusQuoteId('');
+    } catch (statusError) {
+      setError(statusError instanceof Error ? statusError.message : 'Status kon niet worden bijgewerkt.');
+    } finally {
+      setUpdatingQuoteId('');
     }
   };
 
@@ -459,9 +488,25 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
                     <strong>{margin === undefined ? '-' : formatCurrency(margin)}</strong>
                   </td>
                   <td>
-                    <span className={`quote-status-badge status-${quote.status.toLowerCase().replace(/\s+/g, '-')}`}>
-                      {quote.status}
-                    </span>
+                    <div className="status-cell compact">
+                      <span className={`quote-status-badge status-${quote.status.toLowerCase().replace(/\s+/g, '-')}`}>
+                        {quote.status}
+                      </span>
+                      {editingStatusQuoteId === quote.id ? (
+                        <select
+                          aria-label={`Status wijzigen voor ${quote.quoteNumber}`}
+                          disabled={updatingQuoteId === quote.id}
+                          onChange={(event) => void handleStatusChange(quote, event.target.value as QuoteStatus)}
+                          value={quote.status}
+                        >
+                          {quoteStatuses.map((quoteStatus) => (
+                            <option key={quoteStatus} value={quoteStatus}>
+                              {quoteStatus}
+                            </option>
+                          ))}
+                        </select>
+                      ) : null}
+                    </div>
                   </td>
                   <td>{formatDisplayName(quote.createdByLabel)}</td>
                   <td>{new Date(quote.createdAt).toLocaleDateString('nl-NL')}</td>
@@ -477,7 +522,7 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
                         title="Verwijderen"
                         type="button"
                       >
-                        <svg aria-hidden="true" height="15" viewBox="0 0 24 24" width="15">
+                        <svg aria-hidden="true" height="18" viewBox="0 0 24 24" width="18">
                           <path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm1 7h2v8h-2v-8Zm4 0h2v8h-2v-8ZM7 9h10l-1 12H8L7 9Z" fill="currentColor" />
                         </svg>
                       </button>
@@ -494,6 +539,15 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
                         </button>
                         {openMenuQuoteId === quote.id ? (
                           <div className="quote-menu-popover">
+                            <button
+                              onClick={() => {
+                                setEditingStatusQuoteId(quote.id);
+                                setOpenMenuQuoteId('');
+                              }}
+                              type="button"
+                            >
+                              Status wijzigen
+                            </button>
                             <button
                               disabled={duplicatingQuoteId === quote.id}
                               onClick={() => void handleDuplicateQuote(quote)}

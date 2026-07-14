@@ -159,16 +159,6 @@ function PortAutocomplete({ label, name, onChange, options, placeholder, value }
 
 const getDefaultIncoterm = (direction: ShipmentDirection) => (direction === 'import' ? 'FOB' : 'CFR');
 
-const quoteStatusOptions: Array<{ label: QuoteStatus; value: QuoteStatus }> = [
-  { label: 'Concept', value: 'Concept' },
-  { label: 'Open', value: 'Open' },
-  { label: 'Verzonden', value: 'Verzonden' },
-  { label: 'In behandeling', value: 'In behandeling' },
-  { label: 'Gewonnen', value: 'Gewonnen' },
-  { label: 'Verloren', value: 'Verloren' },
-  { label: 'Verlopen', value: 'Verlopen' },
-];
-
 const createQuoteDetails = (direction: ShipmentDirection): LclQuoteDetails => ({
   customerName: '',
   customerReference: '',
@@ -715,13 +705,6 @@ export function LclPage({
               onChange={(event) => updateQuoteDetails('validity', event.target.value)}
               type="date"
               value={quoteDetails.validity}
-            />
-            <SelectField
-              label="Status"
-              name="quoteStatus"
-              onChange={(event) => setQuoteStatus(event.target.value as QuoteStatus)}
-              options={quoteStatusOptions}
-              value={quoteStatus}
             />
             <label className="field quote-note" htmlFor="quote-note">
               <span>Opmerking / omschrijving</span>
