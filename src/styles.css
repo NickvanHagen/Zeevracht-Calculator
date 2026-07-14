@@ -165,8 +165,13 @@ select {
 }
 
 .toolbar-segments {
+  align-items: center;
   display: flex;
   gap: 6px;
+}
+
+.toolbar-single-nav .tab-button {
+  min-width: 104px;
 }
 
 .settings-menu {

@@ -334,20 +334,29 @@ function App() {
         </div>
         <div className="app-toolbar">
           <div className="toolbar-segments">
+            <nav aria-label="Dashboard" className="tab-nav toolbar-single-nav">
+              <button
+                className={appView === 'quotes' ? 'tab-button active toolbar-action-button' : 'tab-button toolbar-action-button'}
+                onClick={() => setAppView('quotes')}
+                type="button"
+              >
+                Dashboard
+              </button>
+            </nav>
             <nav aria-label="Nieuwe calculatie" className="tab-nav">
               <button className="tab-button toolbar-action-button" onClick={handleNewCalculation} type="button">
                 Nieuwe calculatie
               </button>
             </nav>
-            <SegmentedControl
-              label="Scherm"
-              onChange={setAppView}
-              options={[
-                { value: 'calculator', label: 'Calculator' },
-                { value: 'quotes', label: 'Offertes' },
-              ]}
-              value={appView}
-            />
+            <nav aria-label="Calculator" className="tab-nav toolbar-single-nav">
+              <button
+                className={appView === 'calculator' ? 'tab-button active toolbar-action-button' : 'tab-button toolbar-action-button'}
+                onClick={() => setAppView('calculator')}
+                type="button"
+              >
+                Calculator
+              </button>
+            </nav>
             {appView === 'calculator' ? (
               <>
                 <SegmentedControl
