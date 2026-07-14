@@ -15,7 +15,7 @@ import {
   type LclQuoteDetails,
   type LclQuoteLanguage,
 } from '../services/lclQuotePdfService';
-import { saveLclQuoteToSupabase, type SavedQuote } from '../services/quoteService';
+import { saveLclQuoteToSupabase, type QuoteStatus, type SavedQuote } from '../services/quoteService';
 import type { ShipmentDirection } from '../types/shipment';
 import { calculateLclCosts } from '../utils/calculateLclCosts';
 import { calculateLclShipment } from '../utils/calculateLclShipment';
@@ -159,6 +159,16 @@ function PortAutocomplete({ label, name, onChange, options, placeholder, value }
 
 const getDefaultIncoterm = (direction: ShipmentDirection) => (direction === 'import' ? 'FOB' : 'CFR');
 
+const quoteStatusOptions: Array<{ label: QuoteStatus; value: QuoteStatus }> = [
+  { label: 'Concept', value: 'Concept' },
+  { label: 'Open', value: 'Open' },
+  { label: 'Verzonden', value: 'Verzonden' },
+  { label: 'In behandeling', value: 'In behandeling' },
+  { label: 'Gewonnen', value: 'Gewonnen' },
+  { label: 'Verloren', value: 'Verloren' },
+  { label: 'Verlopen', value: 'Verlopen' },
+];
+
 const createQuoteDetails = (direction: ShipmentDirection): LclQuoteDetails => ({
   customerName: '',
   customerReference: '',
@@ -190,6 +200,7 @@ export function LclPage({
   const [salesPriceInput, setSalesPriceInput] = useState('');
   const [pricingInputMode, setPricingInputMode] = useState<'margin' | 'sales'>('margin');
   const [quoteNumber, setQuoteNumber] = useState('');
+  const [quoteStatus, setQuoteStatus] = useState<QuoteStatus>('Concept');
   const [savedQuoteId, setSavedQuoteId] = useState('');
   const [saveQuoteStatus, setSaveQuoteStatus] = useState('');
   const [saveQuoteError, setSaveQuoteError] = useState('');
@@ -264,6 +275,7 @@ export function LclPage({
 
     setSavedQuoteId(openedQuote.id);
     setQuoteNumber(openedQuote.quoteNumber);
+    setQuoteStatus(openedQuote.status ?? 'Open');
     setQuoteDetails({
       customerName: toText(restoredQuoteDetails.customerName) || openedQuote.customerName,
       customerReference: toText(restoredQuoteDetails.customerReference) || openedQuote.customerReference,
@@ -316,6 +328,7 @@ export function LclPage({
     setSalesPriceInput('');
     setPricingInputMode('margin');
     setQuoteNumber('');
+    setQuoteStatus('Concept');
     setSavedQuoteId('');
     setDieselPercentage(getStoredPercentage(LCL_DIESEL_STORAGE_KEY, defaultSurcharges.dieselPercentage));
     setRoadChargePercentage(getStoredPercentage(LCL_ROAD_CHARGE_STORAGE_KEY, defaultSurcharges.roadChargePercentage));
@@ -614,6 +627,7 @@ export function LclPage({
         },
         purchasePrice: totalPurchase,
         salesPrice,
+        status: quoteStatus,
         tffReference: quoteDetails.tffReference,
         unloadingPlace: quoteDetails.unloadingPlace,
         validity: quoteDetails.validity,
@@ -701,6 +715,13 @@ export function LclPage({
               onChange={(event) => updateQuoteDetails('validity', event.target.value)}
               type="date"
               value={quoteDetails.validity}
+            />
+            <SelectField
+              label="Status"
+              name="quoteStatus"
+              onChange={(event) => setQuoteStatus(event.target.value as QuoteStatus)}
+              options={quoteStatusOptions}
+              value={quoteStatus}
             />
             <label className="field quote-note" htmlFor="quote-note">
               <span>Opmerking / omschrijving</span>

@@ -1,20 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   deleteSavedQuote,
+  duplicateSavedQuote,
   fetchSavedQuote,
   fetchSavedQuotes,
-  updateSavedQuoteStatus,
   type QuoteStatus,
   type SavedQuote,
 } from '../services/quoteService';
+import tffLogo from '../assets/tff-logo.png';
+import { generateLclQuotePdf, type LclQuoteDetails, type LclQuotePalletLine } from '../services/lclQuotePdfService';
 import { formatCurrency } from '../utils/formatCurrency';
+import { formatNumber } from '../utils/formatNumber';
 import { formatDisplayName } from '../utils/formatDisplayName';
 
 type QuotesDashboardProps = {
   onOpenQuote: (quote: SavedQuote) => void;
 };
 
-type SortKey = 'quoteNumber' | 'customerName' | 'salesPrice' | 'status' | 'createdAt';
+type SortKey = 'quoteNumber' | 'customerName' | 'salesPrice' | 'margin' | 'status' | 'createdAt';
 type SortDirection = 'asc' | 'desc';
 
 const quoteStatuses: QuoteStatus[] = [
@@ -48,6 +51,41 @@ const isInCurrentMonth = (dateValue: string) => {
   return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
 };
 
+const toText = (value: unknown) => (typeof value === 'string' ? value : '');
+
+const getQuoteMargin = (quote: SavedQuote) =>
+  Number.isFinite(quote.salesPrice) && Number.isFinite(quote.purchasePrice) && quote.purchasePrice > 0
+    ? quote.salesPrice - quote.purchasePrice
+    : undefined;
+
+const getQuoteDetails = (quote: SavedQuote): LclQuoteDetails => {
+  const storedDetails = quote.payload.formState?.quoteDetails ?? {};
+
+  return {
+    customerName: toText(storedDetails.customerName) || quote.customerName,
+    customerReference: toText(storedDetails.customerReference) || quote.customerReference,
+    incoterms: toText(storedDetails.incoterms) || quote.incoterms,
+    loadingAddress: toText(storedDetails.loadingAddress),
+    loadingPlace: toText(storedDetails.loadingPlace) || quote.loadingPlace,
+    note: toText(storedDetails.note),
+    route: '',
+    tffReference: toText(storedDetails.tffReference) || quote.tffReference,
+    unloadingAddress: toText(storedDetails.unloadingAddress),
+    unloadingPlace: toText(storedDetails.unloadingPlace) || quote.unloadingPlace,
+    validity: toText(storedDetails.validity) || quote.validity,
+  };
+};
+
+const getPalletLines = (quote: SavedQuote): LclQuotePalletLine[] =>
+  (quote.payload.formState?.rows ?? []).map((row) => ({
+    heightCm: toText(row.heightCm),
+    lengthCm: toText(row.lengthCm),
+    quantity: toText(row.quantity),
+    type: toText(row.type),
+    weightPerItemKg: toText(row.weightPerItemKg),
+    widthCm: toText(row.widthCm),
+  }));
+
 export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
   const [quotes, setQuotes] = useState<SavedQuote[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -59,7 +97,9 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
   const [sortKey, setSortKey] = useState<SortKey>('createdAt');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [openingQuoteId, setOpeningQuoteId] = useState('');
-  const [updatingQuoteId, setUpdatingQuoteId] = useState('');
+  const [duplicatingQuoteId, setDuplicatingQuoteId] = useState('');
+  const [deleteCandidate, setDeleteCandidate] = useState<SavedQuote | undefined>();
+  const [openMenuQuoteId, setOpenMenuQuoteId] = useState('');
   const [status, setStatus] = useState('Offertes laden...');
   const [error, setError] = useState('');
 
@@ -106,13 +146,13 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
     const lostThisMonth = quotes.filter((quote) => quote.status === 'Verloren' && isInCurrentMonth(quote.statusUpdatedAt));
     const decidedThisMonth = wonThisMonth.length + lostThisMonth.length;
     const conversion = decidedThisMonth > 0 ? (wonThisMonth.length / decidedThisMonth) * 100 : 0;
-    const openSalesValue = openQuotes.reduce((total, quote) => total + quote.salesPrice, 0);
+    const quotesThisMonth = quotes.filter((quote) => isInCurrentMonth(quote.createdAt));
 
     return {
       conversion,
       lostThisMonth: lostThisMonth.length,
       openCount: openQuotes.length,
-      openSalesValue,
+      quotesThisMonth: quotesThisMonth.length,
       wonThisMonth: wonThisMonth.length,
     };
   }, [quotes]);
@@ -159,12 +199,16 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
         const firstValue =
           sortKey === 'salesPrice'
             ? first.salesPrice
+            : sortKey === 'margin'
+              ? getQuoteMargin(first) ?? 0
             : sortKey === 'createdAt'
               ? new Date(first.createdAt).getTime()
               : first[sortKey];
         const secondValue =
           sortKey === 'salesPrice'
             ? second.salesPrice
+            : sortKey === 'margin'
+              ? getQuoteMargin(second) ?? 0
             : sortKey === 'createdAt'
               ? new Date(second.createdAt).getTime()
               : second[sortKey];
@@ -196,38 +240,7 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
     setSortDirection(nextSortKey === 'createdAt' ? 'desc' : 'asc');
   };
 
-  const handleStatusChange = async (quote: SavedQuote, nextStatus: QuoteStatus) => {
-    setError('');
-    setStatus('');
-    setUpdatingQuoteId(quote.id);
-
-    try {
-      const { statusUpdatedAt } = await updateSavedQuoteStatus(quote.id, nextStatus);
-      setQuotes((currentQuotes) =>
-        currentQuotes.map((currentQuote) =>
-          currentQuote.id === quote.id
-            ? {
-                ...currentQuote,
-                status: nextStatus,
-                statusUpdatedAt,
-              }
-            : currentQuote,
-        ),
-      );
-    } catch (statusError) {
-      setError(statusError instanceof Error ? statusError.message : 'Status kon niet worden bijgewerkt.');
-    } finally {
-      setUpdatingQuoteId('');
-    }
-  };
-
   const handleDeleteQuote = async (quote: SavedQuote) => {
-    const confirmed = window.confirm(`Offerte ${quote.quoteNumber} definitief verwijderen?`);
-
-    if (!confirmed) {
-      return;
-    }
-
     setError('');
     setStatus('');
 
@@ -237,6 +250,8 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
       setStatus('Offerte verwijderd.');
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : 'Offerte kon niet worden verwijderd.');
+    } finally {
+      setDeleteCandidate(undefined);
     }
   };
 
@@ -253,6 +268,43 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
     } finally {
       setOpeningQuoteId('');
     }
+  };
+
+  const handleDuplicateQuote = async (quote: SavedQuote) => {
+    setError('');
+    setStatus('');
+    setOpenMenuQuoteId('');
+    setDuplicatingQuoteId(quote.id);
+
+    try {
+      const duplicatedQuote = await duplicateSavedQuote(quote.id);
+      const fullQuote = await fetchSavedQuote(duplicatedQuote.id);
+      onOpenQuote(fullQuote);
+    } catch (duplicateError) {
+      setError(duplicateError instanceof Error ? duplicateError.message : 'Offerte kon niet worden gedupliceerd.');
+    } finally {
+      setDuplicatingQuoteId('');
+    }
+  };
+
+  const handleCreatePdf = (quote: SavedQuote) => {
+    setOpenMenuQuoteId('');
+
+    if (quote.mode !== 'lcl') {
+      window.alert('PDF maken is op dit moment alleen beschikbaar voor LCL-offertes.');
+      return;
+    }
+
+    generateLclQuotePdf({
+      details: getQuoteDetails(quote),
+      direction: quote.direction,
+      language: 'nl',
+      loadMeters: `${formatNumber(Number(quote.payload.loadMeters) || 0)} ldm`,
+      logoUrl: tffLogo,
+      palletLines: getPalletLines(quote),
+      quoteNumber: quote.quoteNumber,
+      salesPrice: formatCurrency(quote.salesPrice),
+    });
   };
 
   const renderSortableHeader = (label: string, nextSortKey: SortKey) => (
@@ -289,8 +341,8 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
           <strong>{kpis.conversion.toLocaleString('nl-NL', { maximumFractionDigits: 1 })}%</strong>
         </div>
         <div className="kpi-card wide">
-          <span>Open verkoopwaarde</span>
-          <strong>{formatCurrency(kpis.openSalesValue)}</strong>
+          <span>Offertes deze maand</span>
+          <strong>{kpis.quotesThisMonth}</strong>
         </div>
       </div>
 
@@ -354,6 +406,14 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
       {status ? <p className="settings-status">{status}</p> : null}
       {error ? <p className="settings-error">{error}</p> : null}
 
+      {!status && quotes.length > 0 ? (
+        <p className="dashboard-result-count">
+          {filteredQuotes.length === 0
+            ? 'Geen offertes gevonden'
+            : `${filteredQuotes.length} ${filteredQuotes.length === 1 ? 'offerte' : 'offertes'} gevonden`}
+        </p>
+      ) : null}
+
       <div className="quotes-table-wrap">
         <table className="quotes-table">
           <thead>
@@ -363,6 +423,7 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
               <th>Traject</th>
               <th>Incoterm</th>
               <th>{renderSortableHeader('Verkoopprijs', 'salesPrice')}</th>
+              <th>{renderSortableHeader('Marge', 'margin')}</th>
               <th>{renderSortableHeader('Status', 'status')}</th>
               <th>Gemaakt door</th>
               <th>{renderSortableHeader('Datum', 'createdAt')}</th>
@@ -372,6 +433,7 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
           <tbody>
             {filteredQuotes.map((quote) => {
               const route = getRouteParts(quote);
+              const margin = getQuoteMargin(quote);
 
               return (
                 <tr key={quote.id}>
@@ -394,23 +456,12 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
                     <strong>{formatCurrency(quote.salesPrice)}</strong>
                   </td>
                   <td>
-                    <div className="status-cell">
-                      <span className={`quote-status-badge status-${quote.status.toLowerCase().replace(/\s+/g, '-')}`}>
-                        {quote.status}
-                      </span>
-                      <select
-                        aria-label={`Status wijzigen voor ${quote.quoteNumber}`}
-                        disabled={updatingQuoteId === quote.id}
-                        onChange={(event) => void handleStatusChange(quote, event.target.value as QuoteStatus)}
-                        value={quote.status}
-                      >
-                        {quoteStatuses.map((quoteStatus) => (
-                          <option key={quoteStatus} value={quoteStatus}>
-                            {quoteStatus}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    <strong>{margin === undefined ? '-' : formatCurrency(margin)}</strong>
+                  </td>
+                  <td>
+                    <span className={`quote-status-badge status-${quote.status.toLowerCase().replace(/\s+/g, '-')}`}>
+                      {quote.status}
+                    </span>
                   </td>
                   <td>{formatDisplayName(quote.createdByLabel)}</td>
                   <td>{new Date(quote.createdAt).toLocaleDateString('nl-NL')}</td>
@@ -419,9 +470,43 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
                       <button disabled={openingQuoteId === quote.id} onClick={() => void handleOpenQuote(quote)} type="button">
                         {openingQuoteId === quote.id ? 'Openen...' : 'Openen'}
                       </button>
-                      <button className="danger" onClick={() => void handleDeleteQuote(quote)} type="button">
-                        Verwijderen
+                      <button
+                        aria-label={`Offerte ${quote.quoteNumber} verwijderen`}
+                        className="icon-action danger"
+                        onClick={() => setDeleteCandidate(quote)}
+                        title="Verwijderen"
+                        type="button"
+                      >
+                        <svg aria-hidden="true" height="15" viewBox="0 0 24 24" width="15">
+                          <path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm1 7h2v8h-2v-8Zm4 0h2v8h-2v-8ZM7 9h10l-1 12H8L7 9Z" fill="currentColor" />
+                        </svg>
                       </button>
+                      <div className="quote-menu">
+                        <button
+                          aria-expanded={openMenuQuoteId === quote.id}
+                          aria-label={`Meer acties voor ${quote.quoteNumber}`}
+                          className="icon-action"
+                          onClick={() => setOpenMenuQuoteId((currentId) => (currentId === quote.id ? '' : quote.id))}
+                          title="Meer acties"
+                          type="button"
+                        >
+                          ...
+                        </button>
+                        {openMenuQuoteId === quote.id ? (
+                          <div className="quote-menu-popover">
+                            <button
+                              disabled={duplicatingQuoteId === quote.id}
+                              onClick={() => void handleDuplicateQuote(quote)}
+                              type="button"
+                            >
+                              {duplicatingQuoteId === quote.id ? 'Dupliceren...' : 'Dupliceren'}
+                            </button>
+                            <button onClick={() => handleCreatePdf(quote)} type="button">
+                              PDF maken
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
                   </td>
                 </tr>
@@ -433,6 +518,22 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
 
       {!status && quotes.length === 0 ? <p className="dashboard-empty">Er zijn nog geen offertes opgeslagen.</p> : null}
       {!status && quotes.length > 0 && filteredQuotes.length === 0 ? <p className="dashboard-empty">Geen offertes gevonden.</p> : null}
+      {deleteCandidate ? (
+        <div className="modal-backdrop" role="presentation">
+          <div aria-modal="true" className="confirm-dialog" role="dialog">
+            <h3>Offerte verwijderen</h3>
+            <p>Weet je zeker dat je deze offerte wilt verwijderen?</p>
+            <div className="confirm-actions">
+              <button onClick={() => setDeleteCandidate(undefined)} type="button">
+                Annuleren
+              </button>
+              <button className="danger" onClick={() => void handleDeleteQuote(deleteCandidate)} type="button">
+                Verwijderen
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

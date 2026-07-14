@@ -51,7 +51,7 @@ export type SavedQuotePayload = {
 
 export type SaveQuoteInput = Omit<
   SavedQuote,
-  'createdAt' | 'createdBy' | 'createdByLabel' | 'id' | 'payload' | 'quoteNumber' | 'status' | 'statusUpdatedAt'
+  'createdAt' | 'createdBy' | 'createdByLabel' | 'id' | 'payload' | 'quoteNumber' | 'statusUpdatedAt'
 > & {
   existingQuoteId?: string;
   payload: SavedQuotePayload;
@@ -139,6 +139,7 @@ export async function saveLclQuoteToSupabase(quote: SaveQuoteInput) {
     p_payload: quote.payload,
     p_purchase_price: quote.purchasePrice,
     p_quote_id: quote.existingQuoteId || null,
+    p_quote_status: quote.status,
     p_sales_price: quote.salesPrice,
     p_tff_reference: quote.tffReference || null,
     p_unloading_place: quote.unloadingPlace || null,
@@ -213,5 +214,23 @@ export async function updateSavedQuoteStatus(quoteId: string, status: QuoteStatu
 
   return {
     statusUpdatedAt: String(updatedQuote?.status_updated_at ?? new Date().toISOString()),
+  };
+}
+
+export async function duplicateSavedQuote(quoteId: string): Promise<{ id: string; quoteNumber: string }> {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc('duplicate_saved_quote', {
+    p_quote_id: quoteId,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const duplicatedQuote = Array.isArray(data) ? data[0] : data;
+
+  return {
+    id: String(duplicatedQuote?.id ?? ''),
+    quoteNumber: String(duplicatedQuote?.quote_number ?? ''),
   };
 }

@@ -1171,7 +1171,7 @@ h1 {
 
 .kpi-card.wide strong {
   color: var(--accent-strong);
-  font-size: 1.08rem;
+  font-size: 1.24rem;
 }
 
 .dashboard-filters {
@@ -1252,6 +1252,13 @@ h1 {
   color: var(--accent-strong);
 }
 
+.dashboard-result-count {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 850;
+  margin: -2px 0 0;
+}
+
 .quotes-table tr:last-child td {
   border-bottom: 0;
 }
@@ -1293,50 +1300,64 @@ h1 {
 }
 
 .quote-status-badge {
+  border: 1px solid transparent;
   border-radius: 999px;
   display: inline-flex;
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   font-weight: 950;
   justify-content: center;
   line-height: 1;
-  padding: 6px 9px;
+  padding: 7px 10px;
   width: fit-content;
 }
 
 .status-concept {
-  background: #eef3f7;
-  color: #596a79;
+  background: #e8eef3;
+  border-color: #c6d3de;
+  color: #40505e;
 }
 
-.status-open,
+.status-open {
+  background: #d9edff;
+  border-color: #94c8f1;
+  color: #005a96;
+}
+
 .status-verzonden {
-  background: #e6f3ff;
-  color: #0064a8;
+  background: #e8f7ff;
+  border-color: #a8d9f3;
+  color: #006b98;
 }
 
 .status-in-behandeling {
-  background: #fff2df;
-  color: #a45b00;
+  background: #fff1d8;
+  border-color: #f2c46d;
+  color: #8a4f00;
 }
 
 .status-gewonnen {
-  background: #e8f7ef;
-  color: #137245;
+  background: #def6e9;
+  border-color: #8bd7ad;
+  color: #0f6a3c;
 }
 
 .status-verloren {
-  background: #fdeced;
-  color: #b4232f;
+  background: #fde7e9;
+  border-color: #f2a7ad;
+  color: #9f1f2b;
 }
 
 .status-verlopen {
-  background: #e5e8eb;
-  color: #3f4a54;
+  background: #d9dde1;
+  border-color: #aab3bc;
+  color: #2f3942;
 }
 
 .quote-actions {
+  align-items: center;
   display: flex;
   gap: 6px;
+  position: relative;
 }
 
 .quote-actions button {
@@ -1358,6 +1379,105 @@ h1 {
 
 .quote-actions .danger {
   color: #d0343f;
+}
+
+.icon-action {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+  min-width: 30px;
+  width: 30px;
+}
+
+.quote-menu {
+  position: relative;
+}
+
+.quote-menu-popover {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  display: grid;
+  min-width: 140px;
+  padding: 6px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+}
+
+.quote-menu-popover button {
+  background: transparent;
+  border: 0;
+  color: var(--text-strong);
+  justify-content: flex-start;
+  padding: 8px 10px;
+  text-align: left;
+  width: 100%;
+}
+
+.quote-menu-popover button:hover {
+  background: var(--panel-bg);
+}
+
+.modal-backdrop {
+  align-items: center;
+  background: rgba(10, 32, 49, 0.28);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 20px;
+  position: fixed;
+  z-index: 50;
+}
+
+.confirm-dialog {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  color: var(--text);
+  max-width: 360px;
+  padding: 18px;
+  width: 100%;
+}
+
+.confirm-dialog h3 {
+  color: var(--text-strong);
+  font-size: 1rem;
+  margin: 0 0 8px;
+}
+
+.confirm-dialog p {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 750;
+  margin: 0;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
+.confirm-actions button {
+  background: var(--control-bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--accent-strong);
+  cursor: pointer;
+  font-weight: 900;
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.confirm-actions .danger {
+  background: #d0343f;
+  border-color: #d0343f;
+  color: #fff;
 }
 
 .dashboard-empty {

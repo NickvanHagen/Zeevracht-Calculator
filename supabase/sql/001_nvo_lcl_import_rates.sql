@@ -1186,6 +1186,7 @@ $$;
 
 drop function if exists public.save_lcl_quote(text, uuid, text, text, text, text, text, text, text, text, numeric, numeric, numeric, jsonb);
 drop function if exists public.save_lcl_quote(uuid, text, text, text, text, text, text, text, text, numeric, numeric, numeric, jsonb);
+drop function if exists public.save_lcl_quote(uuid, text, text, text, text, text, text, text, text, numeric, numeric, numeric, text, jsonb);
 create or replace function public.save_lcl_quote(
   p_quote_id uuid,
   p_direction text,
@@ -1199,6 +1200,7 @@ create or replace function public.save_lcl_quote(
   p_purchase_price numeric,
   p_margin_percentage numeric,
   p_sales_price numeric,
+  p_quote_status text,
   p_payload jsonb
 )
 returns table (id uuid, quote_number text)
@@ -1214,6 +1216,10 @@ declare
 begin
   v_user_id := public.current_tff_user_id();
   v_user_label := public.current_tff_user_label();
+
+  if coalesce(nullif(p_quote_status, ''), 'Concept') not in ('Concept', 'Open', 'Verzonden', 'In behandeling', 'Gewonnen', 'Verloren', 'Verlopen') then
+    raise exception 'Ongeldige offertestatus';
+  end if;
 
   if nullif(trim(p_customer_name), '') is null then
     raise exception 'Klantnaam is verplicht';
@@ -1233,6 +1239,11 @@ begin
       purchase_price = coalesce(p_purchase_price, 0),
       margin_percentage = coalesce(p_margin_percentage, 0),
       sales_price = coalesce(p_sales_price, 0),
+      quote_status = coalesce(nullif(p_quote_status, ''), 'Concept'),
+      status_updated_at = case
+        when public.saved_quotes.quote_status is distinct from coalesce(nullif(p_quote_status, ''), 'Concept') then now()
+        else public.saved_quotes.status_updated_at
+      end,
       payload = coalesce(p_payload, '{}'::jsonb),
       updated_at = now()
     where public.saved_quotes.id = p_quote_id
@@ -1250,16 +1261,63 @@ begin
   insert into public.saved_quotes (
     mode, direction, customer_name, tff_reference, customer_reference, incoterms,
     loading_place, unloading_place, validity, purchase_price, margin_percentage,
-    sales_price, payload, created_by, created_by_label
+    sales_price, quote_status, status_updated_at, payload, created_by, created_by_label
   )
   values (
     'lcl', p_direction, trim(p_customer_name), nullif(trim(coalesce(p_tff_reference, '')), ''),
     nullif(trim(coalesce(p_customer_reference, '')), ''), p_incoterms,
     nullif(trim(coalesce(p_loading_place, '')), ''), nullif(trim(coalesce(p_unloading_place, '')), ''),
     p_validity, coalesce(p_purchase_price, 0), coalesce(p_margin_percentage, 0),
-    coalesce(p_sales_price, 0), coalesce(p_payload, '{}'::jsonb), v_user_id, v_user_label
+    coalesce(p_sales_price, 0), coalesce(nullif(p_quote_status, ''), 'Concept'), now(),
+    coalesce(p_payload, '{}'::jsonb), v_user_id, v_user_label
   )
   returning public.saved_quotes.id, public.saved_quotes.quote_number into v_quote_id, v_quote_number;
+
+  return query select v_quote_id, v_quote_number;
+end;
+$$;
+
+drop function if exists public.duplicate_saved_quote(uuid);
+create or replace function public.duplicate_saved_quote(p_quote_id uuid)
+returns table (id uuid, quote_number text)
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_source public.saved_quotes%rowtype;
+  v_user_id uuid;
+  v_user_label text;
+  v_quote_id uuid;
+  v_quote_number text;
+begin
+  v_user_id := public.current_tff_user_id();
+  v_user_label := public.current_tff_user_label();
+
+  select *
+  into v_source
+  from public.saved_quotes
+  where saved_quotes.id = p_quote_id
+    and saved_quotes.mode = 'lcl'
+  limit 1;
+
+  if v_source.id is null then
+    raise exception 'Offerte niet gevonden';
+  end if;
+
+  insert into public.saved_quotes (
+    mode, direction, customer_name, tff_reference, customer_reference, incoterms,
+    loading_place, unloading_place, validity, purchase_price, margin_percentage,
+    sales_price, quote_status, status_updated_at, payload, created_by, created_by_label
+  )
+  values (
+    v_source.mode, v_source.direction, v_source.customer_name, v_source.tff_reference,
+    v_source.customer_reference, v_source.incoterms, v_source.loading_place,
+    v_source.unloading_place, v_source.validity, v_source.purchase_price,
+    v_source.margin_percentage, v_source.sales_price, 'Concept', now(),
+    v_source.payload, v_user_id, v_user_label
+  )
+  returning saved_quotes.id, saved_quotes.quote_number into v_quote_id, v_quote_number;
 
   return query select v_quote_id, v_quote_number;
 end;
@@ -1388,18 +1446,20 @@ revoke all on function public.replace_nvo_lcl_import_rates(text, text, numeric, 
 revoke all on function public.update_nvo_lcl_import_exchange_rate(uuid, numeric) from public, anon;
 revoke all on function public.replace_nvo_lcl_export_rates(text, text, numeric, jsonb, jsonb) from public, anon;
 revoke all on function public.update_nvo_lcl_export_exchange_rate(uuid, numeric) from public, anon;
-revoke all on function public.save_lcl_quote(uuid, text, text, text, text, text, text, text, text, numeric, numeric, numeric, jsonb) from public, anon;
+revoke all on function public.save_lcl_quote(uuid, text, text, text, text, text, text, text, text, numeric, numeric, numeric, text, jsonb) from public, anon;
 revoke all on function public.list_saved_quotes() from public, anon;
 revoke all on function public.get_saved_quote(uuid) from public, anon;
 revoke all on function public.update_saved_quote_status(uuid, text) from public, anon;
+revoke all on function public.duplicate_saved_quote(uuid) from public, anon;
 revoke all on function public.delete_saved_quote(uuid) from public, anon;
 
 grant execute on function public.replace_nvo_lcl_import_rates(text, text, numeric, jsonb, jsonb) to authenticated;
 grant execute on function public.update_nvo_lcl_import_exchange_rate(uuid, numeric) to authenticated;
 grant execute on function public.replace_nvo_lcl_export_rates(text, text, numeric, jsonb, jsonb) to authenticated;
 grant execute on function public.update_nvo_lcl_export_exchange_rate(uuid, numeric) to authenticated;
-grant execute on function public.save_lcl_quote(uuid, text, text, text, text, text, text, text, text, numeric, numeric, numeric, jsonb) to authenticated;
+grant execute on function public.save_lcl_quote(uuid, text, text, text, text, text, text, text, text, numeric, numeric, numeric, text, jsonb) to authenticated;
 grant execute on function public.list_saved_quotes() to authenticated;
 grant execute on function public.get_saved_quote(uuid) to authenticated;
 grant execute on function public.update_saved_quote_status(uuid, text) to authenticated;
+grant execute on function public.duplicate_saved_quote(uuid) to authenticated;
 grant execute on function public.delete_saved_quote(uuid) to authenticated;
