@@ -158,10 +158,12 @@ function PortAutocomplete({ label, name, onChange, options, placeholder, value }
   );
 }
 
-const createQuoteDetails = (): LclQuoteDetails => ({
+const getDefaultIncoterm = (direction: ShipmentDirection) => (direction === 'import' ? 'FOB' : 'CFR');
+
+const createQuoteDetails = (direction: ShipmentDirection): LclQuoteDetails => ({
   customerName: '',
   customerReference: '',
-  incoterms: '',
+  incoterms: getDefaultIncoterm(direction),
   loadingAddress: '',
   loadingPlace: '',
   note: '',
@@ -181,7 +183,7 @@ export function LclPage({
   openedQuote,
 }: LclPageProps) {
   const isImport = direction === 'import';
-  const [quoteDetails, setQuoteDetails] = useState<LclQuoteDetails>(createQuoteDetails);
+  const [quoteDetails, setQuoteDetails] = useState<LclQuoteDetails>(() => createQuoteDetails(direction));
   const [rows, setRows] = useState<PalletRow[]>([createPalletRow()]);
   const [customsSelected, setCustomsSelected] = useState(false);
   const [adrSelected, setAdrSelected] = useState(false);
@@ -247,10 +249,11 @@ export function LclPage({
 
     setQuoteDetails((currentDetails) => ({
       ...currentDetails,
+      incoterms: getDefaultIncoterm(direction),
       loadingPlace: isImport ? '' : 'Rotterdam',
       unloadingPlace: isImport ? 'Rotterdam' : '',
     }));
-  }, [isImport, openedQuote]);
+  }, [direction, isImport, openedQuote]);
 
   useEffect(() => {
     if (!openedQuote) {
@@ -306,7 +309,7 @@ export function LclPage({
       return;
     }
 
-    setQuoteDetails(createQuoteDetails());
+    setQuoteDetails(createQuoteDetails(direction));
     setRows([createPalletRow()]);
     setCustomsSelected(false);
     setAdrSelected(false);
@@ -320,7 +323,7 @@ export function LclPage({
     setRoadChargePercentage(getStoredPercentage(LCL_ROAD_CHARGE_STORAGE_KEY, defaultSurcharges.roadChargePercentage));
     setSaveQuoteStatus('Nieuwe calculatie gestart.');
     setSaveQuoteError('');
-  }, [newCalculationToken, openedQuote]);
+  }, [direction, newCalculationToken, openedQuote]);
 
   const totals = useMemo(
     () =>
@@ -364,7 +367,7 @@ export function LclPage({
         })
       : undefined;
   const nvoExportCalculation =
-    !isImport && quoteDetails.incoterms === 'FOB'
+    !isImport && quoteDetails.incoterms === 'CFR'
       ? calculateNvoLclExportFob({
           cbm: totalVolumeCbm,
           destinationCfs: quoteDetails.unloadingPlace,
@@ -373,7 +376,7 @@ export function LclPage({
         })
       : undefined;
   const exportTariffWarning =
-    !isImport && quoteDetails.incoterms === 'FOB' && quoteDetails.unloadingPlace.trim() && !nvoExportCalculation
+    !isImport && quoteDetails.incoterms === 'CFR' && quoteDetails.unloadingPlace.trim() && !nvoExportCalculation
       ? nvoExportTariffs
         ? `Geen NVO LCL Export tarief gevonden voor loshaven "${quoteDetails.unloadingPlace}". Kies een haven uit de dropdown.`
         : 'Er zijn nog geen NVO LCL Export tarieven actief. Upload eerst het exporttariefbestand bij Instellingen.'
