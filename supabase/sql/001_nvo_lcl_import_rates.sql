@@ -112,6 +112,10 @@ create table if not exists public.saved_quotes (
   purchase_price numeric(12, 2) not null default 0,
   margin_percentage numeric(8, 4) not null default 0,
   sales_price numeric(12, 2) not null default 0,
+  quote_status text not null default 'Open' check (
+    quote_status in ('Concept', 'Open', 'Verzonden', 'In behandeling', 'Gewonnen', 'Verloren', 'Verlopen')
+  ),
+  status_updated_at timestamptz not null default now(),
   payload jsonb not null default '{}'::jsonb,
   created_by uuid null,
   created_by_label text,
@@ -792,6 +796,34 @@ create table if not exists public.profiles (
 alter table public.saved_quotes
   add column if not exists created_by_label text;
 
+alter table public.saved_quotes
+  add column if not exists quote_status text;
+
+alter table public.saved_quotes
+  add column if not exists status_updated_at timestamptz;
+
+update public.saved_quotes
+set quote_status = 'Open'
+where quote_status is null
+  or quote_status not in ('Concept', 'Open', 'Verzonden', 'In behandeling', 'Gewonnen', 'Verloren', 'Verlopen');
+
+update public.saved_quotes
+set status_updated_at = coalesce(status_updated_at, created_at, now())
+where status_updated_at is null;
+
+alter table public.saved_quotes
+  alter column quote_status set default 'Open',
+  alter column quote_status set not null,
+  alter column status_updated_at set default now(),
+  alter column status_updated_at set not null;
+
+alter table public.saved_quotes
+  drop constraint if exists saved_quotes_quote_status_check;
+
+alter table public.saved_quotes
+  add constraint saved_quotes_quote_status_check
+  check (quote_status in ('Concept', 'Open', 'Verzonden', 'In behandeling', 'Gewonnen', 'Verloren', 'Verlopen'));
+
 update public.rate_files
 set incoterm = 'CFR'
 where provider = 'NVO'
@@ -1240,7 +1272,8 @@ returns table (
   id uuid, quote_number text, mode text, direction text, customer_name text,
   tff_reference text, customer_reference text, incoterms text, loading_place text,
   unloading_place text, validity text, purchase_price numeric, margin_percentage numeric,
-  sales_price numeric, payload jsonb, created_by uuid, created_by_label text, created_at timestamptz
+  sales_price numeric, payload jsonb, created_by uuid, created_by_label text,
+  quote_status text, status_updated_at timestamptz, created_at timestamptz
 )
 language plpgsql
 security definer
@@ -1257,6 +1290,8 @@ begin
     saved_quotes.validity, saved_quotes.purchase_price, saved_quotes.margin_percentage,
     saved_quotes.sales_price, saved_quotes.payload, saved_quotes.created_by,
     coalesce(saved_quotes.created_by_label, profiles.full_name, 'Onbekend') as created_by_label,
+    saved_quotes.quote_status,
+    saved_quotes.status_updated_at,
     saved_quotes.created_at
   from public.saved_quotes
   left join public.profiles on profiles.id = saved_quotes.created_by
@@ -1272,7 +1307,8 @@ returns table (
   id uuid, quote_number text, mode text, direction text, customer_name text,
   tff_reference text, customer_reference text, incoterms text, loading_place text,
   unloading_place text, validity text, purchase_price numeric, margin_percentage numeric,
-  sales_price numeric, payload jsonb, created_by uuid, created_by_label text, created_at timestamptz
+  sales_price numeric, payload jsonb, created_by uuid, created_by_label text,
+  quote_status text, status_updated_at timestamptz, created_at timestamptz
 )
 language plpgsql
 security definer
@@ -1289,12 +1325,46 @@ begin
     saved_quotes.validity, saved_quotes.purchase_price, saved_quotes.margin_percentage,
     saved_quotes.sales_price, saved_quotes.payload, saved_quotes.created_by,
     coalesce(saved_quotes.created_by_label, profiles.full_name, 'Onbekend') as created_by_label,
+    saved_quotes.quote_status,
+    saved_quotes.status_updated_at,
     saved_quotes.created_at
   from public.saved_quotes
   left join public.profiles on profiles.id = saved_quotes.created_by
   where saved_quotes.id = p_quote_id
     and saved_quotes.mode = 'lcl'
   limit 1;
+end;
+$$;
+
+drop function if exists public.update_saved_quote_status(uuid, text);
+create or replace function public.update_saved_quote_status(
+  p_quote_id uuid,
+  p_status text
+)
+returns table (id uuid, quote_status text, status_updated_at timestamptz)
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+begin
+  perform public.current_tff_user_id();
+
+  if p_status not in ('Concept', 'Open', 'Verzonden', 'In behandeling', 'Gewonnen', 'Verloren', 'Verlopen') then
+    raise exception 'Ongeldige offertestatus';
+  end if;
+
+  return query
+  update public.saved_quotes as quote
+  set
+    quote_status = p_status,
+    status_updated_at = now(),
+    updated_at = now()
+  where quote.id = p_quote_id
+  returning quote.id, quote.quote_status, quote.status_updated_at;
+
+  if not found then
+    raise exception 'Offerte niet gevonden';
+  end if;
 end;
 $$;
 
@@ -1321,6 +1391,7 @@ revoke all on function public.update_nvo_lcl_export_exchange_rate(uuid, numeric)
 revoke all on function public.save_lcl_quote(uuid, text, text, text, text, text, text, text, text, numeric, numeric, numeric, jsonb) from public, anon;
 revoke all on function public.list_saved_quotes() from public, anon;
 revoke all on function public.get_saved_quote(uuid) from public, anon;
+revoke all on function public.update_saved_quote_status(uuid, text) from public, anon;
 revoke all on function public.delete_saved_quote(uuid) from public, anon;
 
 grant execute on function public.replace_nvo_lcl_import_rates(text, text, numeric, jsonb, jsonb) to authenticated;
@@ -1330,4 +1401,5 @@ grant execute on function public.update_nvo_lcl_export_exchange_rate(uuid, numer
 grant execute on function public.save_lcl_quote(uuid, text, text, text, text, text, text, text, text, numeric, numeric, numeric, jsonb) to authenticated;
 grant execute on function public.list_saved_quotes() to authenticated;
 grant execute on function public.get_saved_quote(uuid) to authenticated;
+grant execute on function public.update_saved_quote_status(uuid, text) to authenticated;
 grant execute on function public.delete_saved_quote(uuid) to authenticated;

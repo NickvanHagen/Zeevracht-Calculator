@@ -1140,6 +1140,70 @@ h1 {
   width: min(100%, 360px);
 }
 
+.dashboard-kpis {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.kpi-card {
+  background: var(--field-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 5px;
+  min-height: 74px;
+  padding: 11px 12px;
+}
+
+.kpi-card span {
+  color: var(--muted);
+  font-size: 0.73rem;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.kpi-card strong {
+  color: var(--text-strong);
+  font-size: 1.24rem;
+  line-height: 1.15;
+}
+
+.kpi-card.wide strong {
+  color: var(--accent-strong);
+  font-size: 1.08rem;
+}
+
+.dashboard-filters {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(220px, 1.4fr) repeat(5, minmax(130px, 1fr)) auto;
+}
+
+.dashboard-filters .field input,
+.dashboard-filters .field select {
+  height: 34px;
+}
+
+.filters-clear-button {
+  background: var(--control-bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--accent-strong);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 900;
+  min-height: 34px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+.filters-clear-button:hover {
+  background: var(--panel-bg);
+  border-color: var(--border-strong);
+}
+
 .quotes-table-wrap {
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -1169,6 +1233,25 @@ h1 {
   text-transform: uppercase;
 }
 
+.table-sort-button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  gap: 4px;
+  letter-spacing: inherit;
+  padding: 0;
+  text-align: left;
+  text-transform: inherit;
+}
+
+.table-sort-button:hover {
+  color: var(--accent-strong);
+}
+
 .quotes-table tr:last-child td {
   border-bottom: 0;
 }
@@ -1189,6 +1272,66 @@ h1 {
   font-size: 0.78rem;
   font-weight: 750;
   margin-top: 2px;
+}
+
+.status-cell {
+  display: grid;
+  gap: 6px;
+  min-width: 148px;
+}
+
+.status-cell select {
+  appearance: none;
+  background: var(--field-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 800;
+  height: 30px;
+  padding: 0 8px;
+}
+
+.quote-status-badge {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 950;
+  justify-content: center;
+  line-height: 1;
+  padding: 6px 9px;
+  width: fit-content;
+}
+
+.status-concept {
+  background: #eef3f7;
+  color: #596a79;
+}
+
+.status-open,
+.status-verzonden {
+  background: #e6f3ff;
+  color: #0064a8;
+}
+
+.status-in-behandeling {
+  background: #fff2df;
+  color: #a45b00;
+}
+
+.status-gewonnen {
+  background: #e8f7ef;
+  color: #137245;
+}
+
+.status-verloren {
+  background: #fdeced;
+  color: #b4232f;
+}
+
+.status-verlopen {
+  background: #e5e8eb;
+  color: #3f4a54;
 }
 
 .quote-actions {
@@ -1215,6 +1358,12 @@ h1 {
 
 .quote-actions .danger {
   color: #d0343f;
+}
+
+.dashboard-empty {
+  color: var(--muted);
+  font-weight: 850;
+  margin: 0;
 }
 
 @media (max-width: 880px) {
@@ -1255,6 +1404,11 @@ h1 {
 
   .dashboard-search {
     width: 100%;
+  }
+
+  .dashboard-kpis,
+  .dashboard-filters {
+    grid-template-columns: 1fr;
   }
 
   .section-heading {

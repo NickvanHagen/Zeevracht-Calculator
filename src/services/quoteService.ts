@@ -1,6 +1,15 @@
 import { supabase } from './supabaseClient';
 import type { ShipmentDirection, ShipmentMode } from '../types/shipment';
 
+export type QuoteStatus =
+  | 'Concept'
+  | 'Open'
+  | 'Verzonden'
+  | 'In behandeling'
+  | 'Gewonnen'
+  | 'Verloren'
+  | 'Verlopen';
+
 export type SavedQuote = {
   id: string;
   quoteNumber: string;
@@ -19,6 +28,8 @@ export type SavedQuote = {
   createdAt: string;
   createdBy: string | null;
   createdByLabel: string;
+  status: QuoteStatus;
+  statusUpdatedAt: string;
   payload: SavedQuotePayload;
 };
 
@@ -38,7 +49,10 @@ export type SavedQuotePayload = {
   [key: string]: unknown;
 };
 
-export type SaveQuoteInput = Omit<SavedQuote, 'createdAt' | 'createdBy' | 'createdByLabel' | 'id' | 'payload' | 'quoteNumber'> & {
+export type SaveQuoteInput = Omit<
+  SavedQuote,
+  'createdAt' | 'createdBy' | 'createdByLabel' | 'id' | 'payload' | 'quoteNumber' | 'status' | 'statusUpdatedAt'
+> & {
   existingQuoteId?: string;
   payload: SavedQuotePayload;
 };
@@ -59,6 +73,8 @@ type SavedQuoteRow = {
   purchase_price: number | string;
   quote_number: string;
   sales_price: number | string;
+  quote_status?: QuoteStatus | null;
+  status_updated_at?: string | null;
   tff_reference: string | null;
   unloading_place: string | null;
   validity: string;
@@ -104,6 +120,8 @@ const mapSavedQuote = (row: SavedQuoteRow): SavedQuote => ({
   purchasePrice: Number(row.purchase_price) || 0,
   quoteNumber: row.quote_number,
   salesPrice: Number(row.sales_price) || 0,
+  status: row.quote_status ?? 'Open',
+  statusUpdatedAt: row.status_updated_at ?? row.created_at,
   tffReference: row.tff_reference ?? '',
   unloadingPlace: row.unloading_place ?? '',
   validity: row.validity,
@@ -178,4 +196,22 @@ export async function deleteSavedQuote(quoteId: string) {
   if (error) {
     throw new Error(error.message);
   }
+}
+
+export async function updateSavedQuoteStatus(quoteId: string, status: QuoteStatus): Promise<{ statusUpdatedAt: string }> {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc('update_saved_quote_status', {
+    p_quote_id: quoteId,
+    p_status: status,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const updatedQuote = Array.isArray(data) ? data[0] : data;
+
+  return {
+    statusUpdatedAt: String(updatedQuote?.status_updated_at ?? new Date().toISOString()),
+  };
 }
