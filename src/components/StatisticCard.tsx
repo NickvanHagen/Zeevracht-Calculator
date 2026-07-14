@@ -2,8 +2,10 @@ import type { ReactNode } from 'react';
 
 type StatisticCardProps = {
   accent: 'blue' | 'green' | 'red' | 'purple' | 'orange';
+  ariaLabel?: string;
   icon: ReactNode;
   label: string;
+  onClick?: () => void;
   sparkline?: number[];
   subValue?: string;
   value: string;
@@ -28,11 +30,10 @@ const buildSparklinePoints = (values: number[]) => {
     .join(' ');
 };
 
-export function StatisticCard({ accent, icon, label, sparkline, subValue, value }: StatisticCardProps) {
+export function StatisticCard({ accent, ariaLabel, icon, label, onClick, sparkline, subValue, value }: StatisticCardProps) {
   const points = sparkline ? buildSparklinePoints(sparkline) : '';
-
-  return (
-    <article className={`stat-card stat-card-${accent}`}>
+  const content = (
+    <>
       <div className="stat-icon" aria-hidden="true">
         {icon}
       </div>
@@ -46,6 +47,20 @@ export function StatisticCard({ accent, icon, label, sparkline, subValue, value 
           <polyline fill="none" points={points} stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" />
         </svg>
       ) : null}
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button aria-label={ariaLabel ?? label} className={`stat-card stat-card-${accent} interactive-card`} onClick={onClick} type="button">
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <article className={`stat-card stat-card-${accent}`}>
+      {content}
     </article>
   );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
 import {
   deleteSavedQuote,
   duplicateSavedQuote,
@@ -23,6 +24,12 @@ type QuotesDashboardProps = {
 type SortKey = 'quoteNumber' | 'customerName' | 'salesPrice' | 'margin' | 'status' | 'validUntil' | 'createdAt';
 type SortDirection = 'asc' | 'desc';
 type ValidityFilter = '' | 'valid' | 'soon' | 'expired';
+type ActivityItem = {
+  action: string;
+  customerName: string;
+  date: string;
+  quote: SavedQuote;
+};
 
 const trendDays = 12;
 const millisecondsPerDay = 24 * 60 * 60 * 1000;
@@ -39,6 +46,45 @@ const quoteStatuses: QuoteStatus[] = [
 
 const normalize = (value: string) => value.trim().toLowerCase();
 
+const statusQueryMap: Record<string, QuoteStatus | 'pipeline'> = {
+  concept: 'Concept',
+  in_behandeling: 'In behandeling',
+  lost: 'Verloren',
+  open: 'pipeline',
+  pipeline: 'pipeline',
+  sent: 'Verzonden',
+  verlopen: 'Verlopen',
+  won: 'Gewonnen',
+};
+
+const statusToQueryValue = (status: string) => {
+  if (status === 'Gewonnen') {
+    return 'won';
+  }
+
+  if (status === 'Verloren') {
+    return 'lost';
+  }
+
+  if (status === 'In behandeling') {
+    return 'in_behandeling';
+  }
+
+  if (status === 'Verzonden') {
+    return 'sent';
+  }
+
+  if (status === 'Verlopen') {
+    return 'verlopen';
+  }
+
+  if (status === 'Concept') {
+    return 'concept';
+  }
+
+  return status ? status.toLowerCase() : '';
+};
+
 const getRouteParts = (quote: SavedQuote) => {
   const unloadingParts = quote.unloadingPlace.split(/\s+via\s+/i);
 
@@ -54,6 +100,17 @@ const isInCurrentMonth = (dateValue: string) => {
   const now = new Date();
 
   return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+};
+
+const getCurrentMonthRange = () => {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+  return {
+    end: end.toISOString().slice(0, 10),
+    start: start.toISOString().slice(0, 10),
+  };
 };
 
 const getDayKey = (dateValue: string) => {
@@ -93,6 +150,68 @@ const buildDailySeries = (
   return Array.from(totals.values());
 };
 
+const buildDailyRevenueSeries = (quotes: SavedQuote[], offsetDays = 0) => {
+  const today = new Date();
+  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate() - offsetDays);
+  const start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - trendDays + 1);
+  const totals = new Map<string, { date: Date; value: number }>();
+
+  Array.from({ length: trendDays }).forEach((_, index) => {
+    const day = new Date(start.getTime() + index * millisecondsPerDay);
+    totals.set(day.toISOString().slice(0, 10), { date: day, value: 0 });
+  });
+
+  quotes.forEach((quote) => {
+    if (quote.status !== 'Gewonnen' || !Number.isFinite(quote.salesPrice) || quote.salesPrice <= 0) {
+      return;
+    }
+
+    const key = getDayKey(quote.statusUpdatedAt || quote.createdAt);
+
+    if (!totals.has(key)) {
+      return;
+    }
+
+    const current = totals.get(key);
+
+    if (current) {
+      current.value += quote.salesPrice;
+    }
+  });
+
+  return Array.from(totals.values());
+};
+
+const getRelativeExpiryLabel = (daysUntilExpiry?: number) => {
+  if (daysUntilExpiry === undefined) {
+    return '';
+  }
+
+  if (daysUntilExpiry === 0) {
+    return 'vandaag';
+  }
+
+  if (daysUntilExpiry === 1) {
+    return 'morgen';
+  }
+
+  return `over ${daysUntilExpiry} dagen`;
+};
+
+const getActivity = (quote: SavedQuote): ActivityItem => {
+  const createdAt = new Date(quote.createdAt).getTime();
+  const statusUpdatedAt = new Date(quote.statusUpdatedAt).getTime();
+  const hasStatusActivity = Number.isFinite(statusUpdatedAt) && Math.abs(statusUpdatedAt - createdAt) > 1000;
+  const action = hasStatusActivity && quote.status !== 'Open' ? `Offerte ${quote.status.toLowerCase()}` : 'Offerte aangemaakt';
+
+  return {
+    action,
+    customerName: quote.customerName || 'Onbekende klant',
+    date: hasStatusActivity ? quote.statusUpdatedAt : quote.createdAt,
+    quote,
+  };
+};
+
 const toText = (value: unknown) => (typeof value === 'string' ? value : '');
 
 const getQuoteMargin = (quote: SavedQuote) =>
@@ -128,23 +247,58 @@ const getPalletLines = (quote: SavedQuote): LclQuotePalletLine[] =>
     widthCm: toText(row.widthCm),
   }));
 
-const TrendChart = ({ values }: { values: number[] }) => {
-  const max = Math.max(...values, 1);
-  const points = values
-    .map((value, index) => {
-      const x = values.length === 1 ? 0 : (index / (values.length - 1)) * 100;
-      const y = 100 - (value / max) * 84 - 8;
-
-      return `${x.toFixed(2)},${y.toFixed(2)}`;
-    })
-    .join(' ');
-  const areaPoints = `0,100 ${points} 100,100`;
+const TrendTooltip = ({ active, label, payload }: { active?: boolean; label?: string; payload?: Array<{ value?: number }> }) => {
+  if (!active || !payload?.length) {
+    return null;
+  }
 
   return (
-    <svg aria-hidden="true" className="dashboard-trend-chart" preserveAspectRatio="none" viewBox="0 0 100 100">
-      <polygon points={areaPoints} />
-      <polyline points={points} />
-    </svg>
+    <div className="trend-tooltip">
+      <strong>{label}</strong>
+      <span>{formatCurrency(Number(payload[0]?.value) || 0)}</span>
+    </div>
+  );
+};
+
+const TrendChart = ({ data }: { data: Array<{ date: Date; value: number }> }) => {
+  const hasRevenue = data.some((item) => item.value > 0);
+  const chartData = data.map((item) => ({
+    label: item.date.toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit' }),
+    tooltipLabel: item.date.toLocaleDateString('nl-NL', { day: '2-digit', month: 'long', year: 'numeric' }),
+    value: item.value,
+  }));
+
+  return (
+    <div className="dashboard-trend-wrap">
+      {hasRevenue ? (
+        <div aria-label="Omzettrend per dag" className="dashboard-trend-chart" role="img">
+          <ResponsiveContainer height="100%" width="100%">
+            <AreaChart data={chartData} margin={{ bottom: 0, left: 0, right: 4, top: 8 }}>
+              <defs>
+                <linearGradient id="dashboardRevenueGradient" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="5%" stopColor="#0084ca" stopOpacity={0.22} />
+                  <stop offset="95%" stopColor="#0084ca" stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke="rgba(178, 216, 239, 0.62)" strokeDasharray="3 6" vertical={false} />
+              <XAxis axisLine={false} dataKey="label" interval={0} tick={{ fill: '#5f7387', fontSize: 10, fontWeight: 800 }} tickLine={false} />
+              <Tooltip content={<TrendTooltip />} labelFormatter={(_, payload) => payload?.[0]?.payload?.tooltipLabel ?? ''} />
+              <Area
+                dataKey="value"
+                fill="url(#dashboardRevenueGradient)"
+                stroke="#0084ca"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={3}
+                type="monotone"
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      ) : (
+        <div className="dashboard-empty-state">Nog geen gewonnen omzet in deze periode.</div>
+      )}
+    </div>
   );
 };
 
@@ -167,6 +321,96 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
   const [updatingQuoteId, setUpdatingQuoteId] = useState('');
   const [status, setStatus] = useState('Offertes laden...');
   const [error, setError] = useState('');
+
+  const applyQueryToFilters = () => {
+    const params = new URLSearchParams(window.location.search);
+    const statusParam = params.get('status') ?? '';
+    const mappedStatus = statusParam ? statusQueryMap[statusParam] ?? statusParam : '';
+    const expiringWithin = params.get('expiringWithin');
+
+    setStatusFilter(mappedStatus);
+    setValidityFilter(expiringWithin === '7' ? 'soon' : (params.get('validity') as ValidityFilter) || '');
+    setCustomerFilter(params.get('customer') ?? '');
+    setCreatedByFilter(params.get('createdBy') ?? '');
+    setDateFrom(params.get('dateFrom') ?? '');
+    setDateTo(params.get('dateTo') ?? '');
+    setSearchTerm(params.get('search') ?? '');
+  };
+
+  const setUrlFilters = (nextFilters: {
+    createdBy?: string;
+    customer?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    expiringWithin?: string;
+    search?: string;
+    status?: string;
+    validity?: ValidityFilter;
+  }) => {
+    const params = new URLSearchParams();
+
+    if (nextFilters.status) {
+      params.set('status', statusToQueryValue(nextFilters.status));
+    }
+
+    if (nextFilters.expiringWithin) {
+      params.set('expiringWithin', nextFilters.expiringWithin);
+    }
+
+    if (nextFilters.validity && !nextFilters.expiringWithin) {
+      params.set('validity', nextFilters.validity);
+    }
+
+    if (nextFilters.dateFrom) {
+      params.set('dateFrom', nextFilters.dateFrom);
+    }
+
+    if (nextFilters.dateTo) {
+      params.set('dateTo', nextFilters.dateTo);
+    }
+
+    if (nextFilters.search) {
+      params.set('search', nextFilters.search);
+    }
+
+    if (nextFilters.customer) {
+      params.set('customer', nextFilters.customer);
+    }
+
+    if (nextFilters.createdBy) {
+      params.set('createdBy', nextFilters.createdBy);
+    }
+
+    const nextUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
+    window.history.pushState({}, '', nextUrl);
+    applyQueryToFilters();
+  };
+
+  const updateUrlFromCurrentFilters = (
+    nextFilters: Partial<{
+      createdByFilter: string;
+      customerFilter: string;
+      dateFrom: string;
+      dateTo: string;
+      searchTerm: string;
+      statusFilter: string;
+      validityFilter: ValidityFilter;
+    }>,
+  ) => {
+    const nextStatusFilter = nextFilters.statusFilter ?? statusFilter;
+    const nextValidityFilter = nextFilters.validityFilter ?? validityFilter;
+
+    setUrlFilters({
+      createdBy: nextFilters.createdByFilter ?? createdByFilter,
+      customer: nextFilters.customerFilter ?? customerFilter,
+      dateFrom: nextFilters.dateFrom ?? dateFrom,
+      dateTo: nextFilters.dateTo ?? dateTo,
+      expiringWithin: nextValidityFilter === 'soon' ? '7' : '',
+      search: nextFilters.searchTerm ?? searchTerm,
+      status: nextStatusFilter,
+      validity: nextValidityFilter === 'soon' ? '' : nextValidityFilter,
+    });
+  };
 
   useEffect(() => {
     let isCurrent = true;
@@ -193,6 +437,15 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
 
     return () => {
       isCurrent = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    applyQueryToFilters();
+    window.addEventListener('popstate', applyQueryToFilters);
+
+    return () => {
+      window.removeEventListener('popstate', applyQueryToFilters);
     };
   }, []);
 
@@ -228,6 +481,16 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
       () => 1,
     );
     const pipelineTrend = buildDailySeries(pipelineQuotes, (quote) => quote.createdAt, (quote) => quote.salesPrice);
+    const wonRevenueTrend = buildDailyRevenueSeries(quotes);
+    const previousWonRevenueTrend = buildDailyRevenueSeries(quotes, trendDays);
+    const wonRevenueTotal = wonRevenueTrend.reduce((total, item) => total + item.value, 0);
+    const previousWonRevenueTotal = previousWonRevenueTrend.reduce((total, item) => total + item.value, 0);
+    const revenueChange =
+      previousWonRevenueTotal > 0
+        ? ((wonRevenueTotal - previousWonRevenueTotal) / previousWonRevenueTotal) * 100
+        : wonRevenueTotal > 0
+          ? 100
+          : 0;
     const expiringSoonQuotes = pipelineQuotes
       .filter((quote) => {
         const validityInfo = getQuoteValidityInfo(quote.validUntil || quote.validity, quote.status);
@@ -241,8 +504,9 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
         return firstDate.localeCompare(secondDate);
       });
     const largestOpenQuote = [...pipelineQuotes].sort((first, second) => second.salesPrice - first.salesPrice)[0];
-    const recentActivity = [...quotes]
-      .sort((first, second) => new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime())
+    const recentActivity = quotes
+      .map(getActivity)
+      .sort((first, second) => new Date(second.date).getTime() - new Date(first.date).getTime())
       .slice(0, 3);
 
     return {
@@ -254,9 +518,13 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
       openCount: pipelineQuotes.length,
       pipelineValue,
       pipelineTrend,
+      previousWonRevenueTotal,
       recentActivity,
       recentQuoteTrend,
+      revenueChange,
       wonThisMonth: wonThisMonth.length,
+      wonRevenueTotal,
+      wonRevenueTrend,
       wonTrend,
     };
   }, [quotes]);
@@ -272,6 +540,8 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
         const createdDate = new Date(quote.createdAt);
         const createdBy = formatDisplayName(quote.createdByLabel);
         const validityInfo = getQuoteValidityInfo(quote.validUntil || quote.validity, quote.status);
+        const isPipelineQuote =
+          validityInfo.effectiveStatus !== 'Gewonnen' && validityInfo.effectiveStatus !== 'Verloren' && validityInfo.effectiveStatus !== 'Verlopen';
         const matchesValidity =
           !validityFilter ||
           (validityFilter === 'valid' && validityInfo.hasDate && validityInfo.daysUntilExpiry !== undefined && validityInfo.daysUntilExpiry >= 0) ||
@@ -279,7 +549,7 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
             validityInfo.hasDate &&
             validityInfo.daysUntilExpiry !== undefined &&
             validityInfo.daysUntilExpiry >= 0 &&
-            validityInfo.daysUntilExpiry <= 3) ||
+            validityInfo.daysUntilExpiry <= 7) ||
           (validityFilter === 'expired' && validityInfo.effectiveStatus === 'Verlopen');
 
         const matchesSearch =
@@ -301,7 +571,7 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
 
         return (
           matchesSearch &&
-          (!statusFilter || validityInfo.effectiveStatus === statusFilter) &&
+          (!statusFilter || (statusFilter === 'pipeline' ? isPipelineQuote : validityInfo.effectiveStatus === statusFilter)) &&
           (!customerFilter || quote.customerName === customerFilter) &&
           (!createdByFilter || createdBy === createdByFilter) &&
           (!fromDate || createdDate >= fromDate) &&
@@ -347,13 +617,7 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
   }, [createdByFilter, customerFilter, dateFrom, dateTo, quotes, searchTerm, sortDirection, sortKey, statusFilter, validityFilter]);
 
   const resetFilters = () => {
-    setSearchTerm('');
-    setStatusFilter('');
-    setValidityFilter('');
-    setCustomerFilter('');
-    setCreatedByFilter('');
-    setDateFrom('');
-    setDateTo('');
+    setUrlFilters({});
   };
 
   const updateSort = (nextSortKey: SortKey) => {
@@ -466,6 +730,10 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
     </button>
   );
 
+  const monthRange = getCurrentMonthRange();
+  const revenueTrendTone = kpis.revenueChange > 0 ? 'positive' : kpis.revenueChange < 0 ? 'negative' : 'neutral';
+  const routeForLargestQuote = kpis.largestOpenQuote ? getRouteParts(kpis.largestOpenQuote) : undefined;
+
   return (
     <section className="dashboard-page">
       <div className="dashboard-title-row">
@@ -478,36 +746,46 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
       <div className="dashboard-kpis" aria-label="Offerte statistieken">
         <StatisticCard
           accent="blue"
+          ariaLabel="Filter op open offertes"
           icon={<svg height="24" viewBox="0 0 24 24" width="24"><path d="M7 3h7l5 5v13H7V3Zm7 1.8V9h4.2L14 4.8ZM9 13h8v2H9v-2Zm0 4h6v2H9v-2Z" fill="currentColor" /></svg>}
           label="Open offertes"
+          onClick={() => setUrlFilters({ status: 'pipeline' })}
           sparkline={kpis.recentQuoteTrend}
           value={String(kpis.openCount)}
         />
         <StatisticCard
           accent="green"
+          ariaLabel="Filter op gewonnen offertes van deze maand"
           icon={<svg height="24" viewBox="0 0 24 24" width="24"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5Zm-1 14.5-3.5-3.5L9 11.5l2 2 4.5-4.5L17 10.5l-6 6Z" fill="currentColor" /></svg>}
           label="Gewonnen deze maand"
+          onClick={() => setUrlFilters({ dateFrom: monthRange.start, dateTo: monthRange.end, status: 'Gewonnen' })}
           sparkline={kpis.wonTrend}
           value={String(kpis.wonThisMonth)}
         />
         <StatisticCard
           accent="red"
+          ariaLabel="Filter op verloren offertes van deze maand"
           icon={<svg height="24" viewBox="0 0 24 24" width="24"><path d="M11 3h2v11h-2V3Zm0 14h2v4h-2v-4ZM5 5h4v2H7v10h2v2H5V5Zm10 0h4v14h-4v-2h2V7h-2V5Z" fill="currentColor" /></svg>}
           label="Verloren deze maand"
+          onClick={() => setUrlFilters({ dateFrom: monthRange.start, dateTo: monthRange.end, status: 'Verloren' })}
           sparkline={kpis.lostTrend}
           value={String(kpis.lostThisMonth)}
         />
         <StatisticCard
           accent="purple"
+          ariaLabel="Bekijk conversie-inzicht"
           icon={<svg height="24" viewBox="0 0 24 24" width="24"><path d="M13 2v9h9a10 10 0 1 1-9-9Zm2 2.3V9h4.7A8.1 8.1 0 0 0 15 4.3Z" fill="currentColor" /></svg>}
           label="Conversie"
+          onClick={() => document.querySelector('.dashboard-insights')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
           sparkline={[kpis.lostThisMonth, kpis.wonThisMonth, kpis.conversion]}
           value={`${kpis.conversion.toLocaleString('nl-NL', { maximumFractionDigits: 1 })}%`}
         />
         <StatisticCard
           accent="orange"
+          ariaLabel="Filter op omzet in pijplijn"
           icon={<svg height="24" viewBox="0 0 24 24" width="24"><path d="M12 3 4 7v6c0 4.5 3.4 7.5 8 8 4.6-.5 8-3.5 8-8V7l-8-4Zm0 4a3 3 0 0 1 3 3h-2a1 1 0 1 0-1 1 3 3 0 1 1-3 3h2a1 1 0 1 0 1-1 3 3 0 0 1 0-6Z" fill="currentColor" /></svg>}
           label="Omzet in pijplijn"
+          onClick={() => setUrlFilters({ status: 'pipeline' })}
           sparkline={kpis.pipelineTrend}
           subValue={`${kpis.openCount} ${kpis.openCount === 1 ? 'offerte' : 'offertes'}`}
           value={formatCurrency(kpis.pipelineValue)}
@@ -519,14 +797,26 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
           <div className="insight-card-header">
             <div>
               <span>Omzet laatste {trendDays} dagen</span>
-              <strong>{formatCurrency(kpis.pipelineTrend.reduce((total, value) => total + value, 0))}</strong>
+              <strong>{formatCurrency(kpis.wonRevenueTotal)}</strong>
             </div>
-            <small>Gebaseerd op open offertewaarde per aanmaakdag</small>
+            <small className={`trend-change trend-${revenueTrendTone}`}>
+              {kpis.previousWonRevenueTotal === 0 && kpis.wonRevenueTotal === 0
+                ? 'Geen vergelijking beschikbaar'
+                : `${kpis.revenueChange >= 0 ? '+' : ''}${kpis.revenueChange.toLocaleString('nl-NL', { maximumFractionDigits: 1 })}% t.o.v. vorige periode`}
+            </small>
           </div>
-          <TrendChart values={kpis.pipelineTrend} />
+          <TrendChart data={kpis.wonRevenueTrend} />
+          <button
+            className="insight-link"
+            onClick={() => setUrlFilters({ dateFrom: monthRange.start, dateTo: monthRange.end, status: 'Gewonnen' })}
+            type="button"
+          >
+            Bekijk gewonnen offertes
+            <span aria-hidden="true">→</span>
+          </button>
         </article>
 
-        <article className="insight-card">
+        <article className="insight-card insight-warning">
           <div className="insight-accent insight-accent-orange" aria-hidden="true">
             <svg height="18" viewBox="0 0 24 24" width="18">
               <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm1 11h5v-2h-4V6h-2v7Z" fill="currentColor" />
@@ -534,6 +824,40 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
           </div>
           <span>Verloopt binnen 7 dagen</span>
           <strong>{kpis.expiringSoonQuotes.length}</strong>
+          <div className="urgent-list">
+            {kpis.expiringSoonQuotes.length > 0 ? (
+              kpis.expiringSoonQuotes.slice(0, 3).map((quote) => {
+                const validityInfo = getQuoteValidityInfo(quote.validUntil || quote.validity, quote.status);
+                const urgencyClass =
+                  validityInfo.daysUntilExpiry === 0 ? 'urgent-today' : validityInfo.daysUntilExpiry === 1 ? 'urgent-tomorrow' : 'urgent-soon';
+
+                return (
+                  <button
+                    aria-label={`Open offerte ${quote.quoteNumber} van ${quote.customerName}`}
+                    className={`urgent-row ${urgencyClass}`}
+                    key={quote.id}
+                    onClick={() => void handleOpenQuote(quote)}
+                    type="button"
+                  >
+                    <span>
+                      <strong>{quote.quoteNumber}</strong>
+                      <small>{quote.customerName || 'Onbekende klant'}</small>
+                    </span>
+                    <span>
+                      <strong>{formatValidUntil(quote.validUntil || quote.validity)}</strong>
+                      <small>{getRelativeExpiryLabel(validityInfo.daysUntilExpiry)}</small>
+                    </span>
+                  </button>
+                );
+              })
+            ) : (
+              <div className="dashboard-empty-state">Geen offertes die binnen 7 dagen verlopen.</div>
+            )}
+          </div>
+          <button className="insight-link" onClick={() => setUrlFilters({ expiringWithin: '7' })} type="button">
+            Bekijk alle aflopende offertes
+            <span aria-hidden="true">→</span>
+          </button>
           <small>
             {kpis.expiringSoonQuotes[0]
               ? `${kpis.expiringSoonQuotes[0].quoteNumber} · ${formatValidUntil(kpis.expiringSoonQuotes[0].validUntil || kpis.expiringSoonQuotes[0].validity)}`
@@ -541,16 +865,43 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
           </small>
         </article>
 
-        <article className="insight-card">
+        {kpis.largestOpenQuote ? (
+          <button
+            aria-label={`Open grootste offerte ${kpis.largestOpenQuote.quoteNumber}`}
+            className="insight-card largest-quote-card interactive-insight"
+            onClick={() => void handleOpenQuote(kpis.largestOpenQuote)}
+            type="button"
+          >
           <div className="insight-accent insight-accent-blue" aria-hidden="true">
             <svg height="18" viewBox="0 0 24 24" width="18">
               <path d="M12 3 4 7v10l8 4 8-4V7l-8-4Zm-4 8 4 2 4-2v4l-4 2-4-2v-4Z" fill="currentColor" />
             </svg>
           </div>
+          <span className="card-arrow" aria-hidden="true">→</span>
           <span>Grootste open offerte</span>
-          <strong>{kpis.largestOpenQuote ? kpis.largestOpenQuote.quoteNumber : '-'}</strong>
-          <small>{kpis.largestOpenQuote ? formatCurrency(kpis.largestOpenQuote.salesPrice) : 'Nog geen open waarde'}</small>
-        </article>
+          <strong>{kpis.largestOpenQuote.quoteNumber}</strong>
+          <small>{kpis.largestOpenQuote.customerName || 'Onbekende klant'}</small>
+          <div className="largest-quote-meta">
+            <span>{routeForLargestQuote ? `${routeForLargestQuote.from} → ${routeForLargestQuote.to}` : '-'}</span>
+            <span>{formatCurrency(kpis.largestOpenQuote.salesPrice)}</span>
+            <span>Marge {getQuoteMargin(kpis.largestOpenQuote) === undefined ? '-' : formatCurrency(getQuoteMargin(kpis.largestOpenQuote) ?? 0)}</span>
+            <span>{formatValidUntil(kpis.largestOpenQuote.validUntil || kpis.largestOpenQuote.validity)}</span>
+          </div>
+          <span className={`quote-status-badge status-${kpis.largestOpenQuote.status.toLowerCase().replace(/\s+/g, '-')}`}>
+            {kpis.largestOpenQuote.status}
+          </span>
+          </button>
+        ) : (
+          <article className="insight-card">
+            <div className="insight-accent insight-accent-blue" aria-hidden="true">
+              <svg height="18" viewBox="0 0 24 24" width="18">
+                <path d="M12 3 4 7v10l8 4 8-4V7l-8-4Zm-4 8 4 2 4-2v4l-4 2-4-2v-4Z" fill="currentColor" />
+              </svg>
+            </div>
+            <span>Grootste open offerte</span>
+            <div className="dashboard-empty-state">Geen open offertes beschikbaar.</div>
+          </article>
+        )}
 
         <article className="insight-card insight-activity">
           <div className="insight-card-header">
@@ -561,15 +912,24 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
           </div>
           <div className="activity-list">
             {kpis.recentActivity.length > 0 ? (
-              kpis.recentActivity.map((quote) => (
-                <div className="activity-row" key={quote.id}>
-                  <span>{new Date(quote.createdAt).toLocaleDateString('nl-NL', { day: '2-digit', month: 'short' })}</span>
-                  <strong>{quote.quoteNumber}</strong>
-                  <small>{quote.customerName || 'Onbekende klant'}</small>
-                </div>
+              kpis.recentActivity.map((activity) => (
+                <button
+                  aria-label={`Open ${activity.quote.quoteNumber}, ${activity.action}`}
+                  className="activity-row"
+                  key={`${activity.quote.id}-${activity.date}`}
+                  onClick={() => void handleOpenQuote(activity.quote)}
+                  type="button"
+                >
+                  <span>{new Date(activity.date).toLocaleDateString('nl-NL', { day: '2-digit', month: 'short' })}</span>
+                  <strong>{activity.action}</strong>
+                  <small>
+                    {activity.quote.quoteNumber} · {activity.customerName}
+                  </small>
+                  <span className="activity-chevron" aria-hidden="true">›</span>
+                </button>
               ))
             ) : (
-              <p>Geen recente activiteit.</p>
+              <div className="dashboard-empty-state">Nog geen recente activiteit.</div>
             )}
           </div>
         </article>
@@ -580,7 +940,7 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
           <span>Zoeken</span>
           <input
             id="quote-search"
-            onChange={(event) => setSearchTerm(event.target.value)}
+            onChange={(event) => updateUrlFromCurrentFilters({ searchTerm: event.target.value })}
             placeholder="Offerte, klant, referentie, haven..."
             type="text"
             value={searchTerm}
@@ -588,8 +948,9 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
         </label>
         <label className="field" htmlFor="quote-status-filter">
           <span>Status</span>
-          <select id="quote-status-filter" onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}>
+          <select id="quote-status-filter" onChange={(event) => updateUrlFromCurrentFilters({ statusFilter: event.target.value })} value={statusFilter}>
             <option value="">Alle statussen</option>
+            <option value="pipeline">Open pijplijn</option>
             {quoteStatuses.map((quoteStatus) => (
               <option key={quoteStatus} value={quoteStatus}>
                 {quoteStatus}
@@ -599,7 +960,7 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
         </label>
         <label className="field" htmlFor="quote-customer-filter">
           <span>Klant</span>
-          <select id="quote-customer-filter" onChange={(event) => setCustomerFilter(event.target.value)} value={customerFilter}>
+          <select id="quote-customer-filter" onChange={(event) => updateUrlFromCurrentFilters({ customerFilter: event.target.value })} value={customerFilter}>
             <option value="">Alle klanten</option>
             {customerOptions.map((customer) => (
               <option key={customer} value={customer}>
@@ -612,18 +973,18 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
           <span>Geldigheid</span>
           <select
             id="quote-validity-filter"
-            onChange={(event) => setValidityFilter(event.target.value as ValidityFilter)}
+            onChange={(event) => updateUrlFromCurrentFilters({ validityFilter: event.target.value as ValidityFilter })}
             value={validityFilter}
           >
             <option value="">Alle offertes</option>
             <option value="valid">Nog geldig</option>
-            <option value="soon">Verloopt binnen 3 dagen</option>
+            <option value="soon">Verloopt binnen 7 dagen</option>
             <option value="expired">Verlopen</option>
           </select>
         </label>
         <label className="field" htmlFor="quote-created-by-filter">
           <span>Gemaakt door</span>
-          <select id="quote-created-by-filter" onChange={(event) => setCreatedByFilter(event.target.value)} value={createdByFilter}>
+          <select id="quote-created-by-filter" onChange={(event) => updateUrlFromCurrentFilters({ createdByFilter: event.target.value })} value={createdByFilter}>
             <option value="">Iedereen</option>
             {createdByOptions.map((createdBy) => (
               <option key={createdBy} value={createdBy}>
@@ -634,11 +995,11 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
         </label>
         <label className="field" htmlFor="quote-date-from">
           <span>Datum vanaf</span>
-          <input id="quote-date-from" onChange={(event) => setDateFrom(event.target.value)} type="date" value={dateFrom} />
+          <input id="quote-date-from" onChange={(event) => updateUrlFromCurrentFilters({ dateFrom: event.target.value })} type="date" value={dateFrom} />
         </label>
         <label className="field" htmlFor="quote-date-to">
           <span>Datum tot</span>
-          <input id="quote-date-to" onChange={(event) => setDateTo(event.target.value)} type="date" value={dateTo} />
+          <input id="quote-date-to" onChange={(event) => updateUrlFromCurrentFilters({ dateTo: event.target.value })} type="date" value={dateTo} />
         </label>
         <button className="filters-clear-button" onClick={resetFilters} type="button">
           Filters wissen
