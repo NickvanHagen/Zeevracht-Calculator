@@ -777,6 +777,7 @@ grant execute on function public.delete_saved_quote(text, uuid) to anon;
 
 -- 2026-07-14: Per-user Supabase Auth login for TFF users.
 -- Run the full file in Supabase SQL Editor. Existing shared-password functions are revoked below.
+-- Public signup should be disabled in Supabase Auth; create colleagues manually via Authentication > Users.
 
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
@@ -860,11 +861,11 @@ begin
     raise exception 'Alleen @tfflogistics.com e-mailadressen kunnen een account maken';
   end if;
 
-  v_full_name := nullif(trim(coalesce(new.raw_user_meta_data->>'full_name', '')), '');
-
-  if v_full_name is null then
-    raise exception 'Naam is verplicht';
-  end if;
+  v_full_name := coalesce(
+    nullif(trim(coalesce(new.raw_user_meta_data->>'full_name', '')), ''),
+    nullif(trim(coalesce(new.raw_user_meta_data->>'name', '')), ''),
+    split_part(lower(new.email), '@', 1)
+  );
 
   insert into public.profiles (id, email, full_name)
   values (new.id, lower(new.email), v_full_name)
@@ -910,7 +911,7 @@ begin
   end if;
 
   insert into public.profiles (id, email, full_name)
-  values (v_user_id, v_email, coalesce(v_full_name, v_email))
+  values (v_user_id, v_email, coalesce(v_full_name, split_part(v_email, '@', 1)))
   on conflict (id) do nothing;
 
   return v_user_id;

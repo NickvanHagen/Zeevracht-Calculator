@@ -23,7 +23,6 @@ import {
   getCurrentUser,
   signInTffUser,
   signOutTffUser,
-  signUpTffUser,
   type TffUser,
 } from './services/authService';
 import { isSupabaseConfigured } from './services/supabaseClient';
@@ -43,11 +42,8 @@ const directionOptions: Array<{ value: ShipmentDirection; label: string }> = [
 
 function App() {
   const [currentUser, setCurrentUser] = useState<TffUser | undefined>();
-  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [authLoading, setAuthLoading] = useState(true);
-  const [authStatus, setAuthStatus] = useState('');
   const [email, setEmail] = useState('');
-  const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [shipmentMode, setShipmentMode] = useState<ShipmentMode>('lcl');
@@ -134,19 +130,10 @@ function App() {
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setLoginError('');
-    setAuthStatus('');
 
     try {
-      const user =
-        authMode === 'login'
-          ? await signInTffUser(email, password)
-          : await signUpTffUser({ email, name: fullName, password });
-
-      if (user) {
-        setCurrentUser(user);
-      } else {
-        setAuthStatus('Account aangemaakt. Controleer je e-mail om je account te bevestigen.');
-      }
+      const user = await signInTffUser(email, password);
+      setCurrentUser(user);
       setPassword('');
       return;
     } catch (error) {
@@ -305,26 +292,6 @@ function App() {
         <form className="login-card" onSubmit={handleLogin}>
           <img alt="TFF" className="login-logo" src={tffLogo} />
           <h1>Team Freight Forwarding</h1>
-          <div className="auth-mode-switch">
-            <button className={authMode === 'login' ? 'active' : ''} onClick={() => setAuthMode('login')} type="button">
-              Inloggen
-            </button>
-            <button className={authMode === 'signup' ? 'active' : ''} onClick={() => setAuthMode('signup')} type="button">
-              Account maken
-            </button>
-          </div>
-          {authMode === 'signup' ? (
-            <label className="field" htmlFor="full-name">
-              <span>Naam</span>
-              <input
-                autoComplete="name"
-                id="full-name"
-                onChange={(event) => setFullName(event.target.value)}
-                type="text"
-                value={fullName}
-              />
-            </label>
-          ) : null}
           <label className="field" htmlFor="user-email">
             <span>E-mail</span>
             <input
@@ -339,18 +306,16 @@ function App() {
           <label className="field" htmlFor="user-password">
             <span>Wachtwoord</span>
             <input
-              autoComplete={authMode === 'login' ? 'current-password' : 'new-password'}
+              autoComplete="current-password"
               id="user-password"
               onChange={(event) => setPassword(event.target.value)}
               type="password"
               value={password}
             />
           </label>
-          <p className="login-help">Alleen e-mailadressen die eindigen op @tfflogistics.com kunnen een account maken.</p>
           {loginError ? <p className="login-error">{loginError}</p> : null}
-          {authStatus ? <p className="settings-status">{authStatus}</p> : null}
           <button className="login-button" type="submit">
-            {authMode === 'login' ? 'Inloggen' : 'Account maken'}
+            Inloggen
           </button>
         </form>
       </main>

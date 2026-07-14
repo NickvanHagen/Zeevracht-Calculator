@@ -57,44 +57,6 @@ export async function signInTffUser(email: string, password: string): Promise<Tf
   return mapAuthUser(data.user);
 }
 
-export async function signUpTffUser({
-  email,
-  name,
-  password,
-}: {
-  email: string;
-  name: string;
-  password: string;
-}) {
-  const trimmedName = name.trim();
-  const normalizedEmail = email.trim().toLowerCase();
-
-  if (!trimmedName) {
-    throw new Error('Naam is verplicht.');
-  }
-
-  if (!isTffEmail(normalizedEmail)) {
-    throw new Error('Alleen @tfflogistics.com e-mailadressen kunnen een account maken.');
-  }
-
-  const client = requireSupabase();
-  const { data, error } = await client.auth.signUp({
-    email: normalizedEmail,
-    password,
-    options: {
-      data: {
-        full_name: trimmedName,
-      },
-    },
-  });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return data.user && data.session ? mapAuthUser(data.user) : undefined;
-}
-
 export async function signOutTffUser() {
   const client = requireSupabase();
   const { error } = await client.auth.signOut();
