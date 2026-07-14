@@ -24,6 +24,9 @@ type SortKey = 'quoteNumber' | 'customerName' | 'salesPrice' | 'margin' | 'statu
 type SortDirection = 'asc' | 'desc';
 type ValidityFilter = '' | 'valid' | 'soon' | 'expired';
 
+const trendDays = 12;
+const millisecondsPerDay = 24 * 60 * 60 * 1000;
+
 const quoteStatuses: QuoteStatus[] = [
   'Concept',
   'Open',
@@ -51,6 +54,43 @@ const isInCurrentMonth = (dateValue: string) => {
   const now = new Date();
 
   return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+};
+
+const getDayKey = (dateValue: string) => {
+  const date = new Date(dateValue);
+
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return date.toISOString().slice(0, 10);
+};
+
+const buildDailySeries = (
+  quotes: SavedQuote[],
+  dateSelector: (quote: SavedQuote) => string,
+  valueSelector: (quote: SavedQuote) => number,
+) => {
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - trendDays + 1);
+  const totals = new Map<string, number>();
+
+  Array.from({ length: trendDays }).forEach((_, index) => {
+    const day = new Date(start.getTime() + index * millisecondsPerDay);
+    totals.set(day.toISOString().slice(0, 10), 0);
+  });
+
+  quotes.forEach((quote) => {
+    const key = getDayKey(dateSelector(quote));
+
+    if (!totals.has(key)) {
+      return;
+    }
+
+    totals.set(key, (totals.get(key) ?? 0) + valueSelector(quote));
+  });
+
+  return Array.from(totals.values());
 };
 
 const toText = (value: unknown) => (typeof value === 'string' ? value : '');
@@ -87,6 +127,26 @@ const getPalletLines = (quote: SavedQuote): LclQuotePalletLine[] =>
     weightPerItemKg: toText(row.weightPerItemKg),
     widthCm: toText(row.widthCm),
   }));
+
+const TrendChart = ({ values }: { values: number[] }) => {
+  const max = Math.max(...values, 1);
+  const points = values
+    .map((value, index) => {
+      const x = values.length === 1 ? 0 : (index / (values.length - 1)) * 100;
+      const y = 100 - (value / max) * 84 - 8;
+
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(' ');
+  const areaPoints = `0,100 ${points} 100,100`;
+
+  return (
+    <svg aria-hidden="true" className="dashboard-trend-chart" preserveAspectRatio="none" viewBox="0 0 100 100">
+      <polygon points={areaPoints} />
+      <polyline points={points} />
+    </svg>
+  );
+};
 
 export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
   const [quotes, setQuotes] = useState<SavedQuote[]>([]);
@@ -156,13 +216,48 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
     const decidedThisMonth = wonThisMonth.length + lostThisMonth.length;
     const conversion = decidedThisMonth > 0 ? (wonThisMonth.length / decidedThisMonth) * 100 : 0;
     const pipelineValue = pipelineQuotes.reduce((total, quote) => total + quote.salesPrice, 0);
+    const recentQuoteTrend = buildDailySeries(quotes, (quote) => quote.createdAt, () => 1);
+    const wonTrend = buildDailySeries(
+      quotes.filter((quote) => quote.status === 'Gewonnen'),
+      (quote) => quote.statusUpdatedAt,
+      () => 1,
+    );
+    const lostTrend = buildDailySeries(
+      quotes.filter((quote) => quote.status === 'Verloren'),
+      (quote) => quote.statusUpdatedAt,
+      () => 1,
+    );
+    const pipelineTrend = buildDailySeries(pipelineQuotes, (quote) => quote.createdAt, (quote) => quote.salesPrice);
+    const expiringSoonQuotes = pipelineQuotes
+      .filter((quote) => {
+        const validityInfo = getQuoteValidityInfo(quote.validUntil || quote.validity, quote.status);
+
+        return validityInfo.hasDate && validityInfo.daysUntilExpiry !== undefined && validityInfo.daysUntilExpiry >= 0 && validityInfo.daysUntilExpiry <= 7;
+      })
+      .sort((first, second) => {
+        const firstDate = getDateInputValue(first.validUntil || first.validity) || '9999-12-31';
+        const secondDate = getDateInputValue(second.validUntil || second.validity) || '9999-12-31';
+
+        return firstDate.localeCompare(secondDate);
+      });
+    const largestOpenQuote = [...pipelineQuotes].sort((first, second) => second.salesPrice - first.salesPrice)[0];
+    const recentActivity = [...quotes]
+      .sort((first, second) => new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime())
+      .slice(0, 3);
 
     return {
       conversion,
+      expiringSoonQuotes,
+      largestOpenQuote,
       lostThisMonth: lostThisMonth.length,
+      lostTrend,
       openCount: pipelineQuotes.length,
       pipelineValue,
+      pipelineTrend,
+      recentActivity,
+      recentQuoteTrend,
       wonThisMonth: wonThisMonth.length,
+      wonTrend,
     };
   }, [quotes]);
 
@@ -385,33 +480,99 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
           accent="blue"
           icon={<svg height="24" viewBox="0 0 24 24" width="24"><path d="M7 3h7l5 5v13H7V3Zm7 1.8V9h4.2L14 4.8ZM9 13h8v2H9v-2Zm0 4h6v2H9v-2Z" fill="currentColor" /></svg>}
           label="Open offertes"
+          sparkline={kpis.recentQuoteTrend}
           value={String(kpis.openCount)}
         />
         <StatisticCard
           accent="green"
           icon={<svg height="24" viewBox="0 0 24 24" width="24"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5Zm-1 14.5-3.5-3.5L9 11.5l2 2 4.5-4.5L17 10.5l-6 6Z" fill="currentColor" /></svg>}
           label="Gewonnen deze maand"
+          sparkline={kpis.wonTrend}
           value={String(kpis.wonThisMonth)}
         />
         <StatisticCard
           accent="red"
           icon={<svg height="24" viewBox="0 0 24 24" width="24"><path d="M11 3h2v11h-2V3Zm0 14h2v4h-2v-4ZM5 5h4v2H7v10h2v2H5V5Zm10 0h4v14h-4v-2h2V7h-2V5Z" fill="currentColor" /></svg>}
           label="Verloren deze maand"
+          sparkline={kpis.lostTrend}
           value={String(kpis.lostThisMonth)}
         />
         <StatisticCard
           accent="purple"
           icon={<svg height="24" viewBox="0 0 24 24" width="24"><path d="M13 2v9h9a10 10 0 1 1-9-9Zm2 2.3V9h4.7A8.1 8.1 0 0 0 15 4.3Z" fill="currentColor" /></svg>}
           label="Conversie"
+          sparkline={[kpis.lostThisMonth, kpis.wonThisMonth, kpis.conversion]}
           value={`${kpis.conversion.toLocaleString('nl-NL', { maximumFractionDigits: 1 })}%`}
         />
         <StatisticCard
           accent="orange"
           icon={<svg height="24" viewBox="0 0 24 24" width="24"><path d="M12 3 4 7v6c0 4.5 3.4 7.5 8 8 4.6-.5 8-3.5 8-8V7l-8-4Zm0 4a3 3 0 0 1 3 3h-2a1 1 0 1 0-1 1 3 3 0 1 1-3 3h2a1 1 0 1 0 1-1 3 3 0 0 1 0-6Z" fill="currentColor" /></svg>}
           label="Omzet in pijplijn"
+          sparkline={kpis.pipelineTrend}
           subValue={`${kpis.openCount} ${kpis.openCount === 1 ? 'offerte' : 'offertes'}`}
           value={formatCurrency(kpis.pipelineValue)}
         />
+      </div>
+
+      <div className="dashboard-insights" aria-label="Dashboard inzichten">
+        <article className="insight-card insight-card-wide">
+          <div className="insight-card-header">
+            <div>
+              <span>Omzet laatste {trendDays} dagen</span>
+              <strong>{formatCurrency(kpis.pipelineTrend.reduce((total, value) => total + value, 0))}</strong>
+            </div>
+            <small>Gebaseerd op open offertewaarde per aanmaakdag</small>
+          </div>
+          <TrendChart values={kpis.pipelineTrend} />
+        </article>
+
+        <article className="insight-card">
+          <div className="insight-accent insight-accent-orange" aria-hidden="true">
+            <svg height="18" viewBox="0 0 24 24" width="18">
+              <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm1 11h5v-2h-4V6h-2v7Z" fill="currentColor" />
+            </svg>
+          </div>
+          <span>Verloopt binnen 7 dagen</span>
+          <strong>{kpis.expiringSoonQuotes.length}</strong>
+          <small>
+            {kpis.expiringSoonQuotes[0]
+              ? `${kpis.expiringSoonQuotes[0].quoteNumber} · ${formatValidUntil(kpis.expiringSoonQuotes[0].validUntil || kpis.expiringSoonQuotes[0].validity)}`
+              : 'Geen urgente offertes'}
+          </small>
+        </article>
+
+        <article className="insight-card">
+          <div className="insight-accent insight-accent-blue" aria-hidden="true">
+            <svg height="18" viewBox="0 0 24 24" width="18">
+              <path d="M12 3 4 7v10l8 4 8-4V7l-8-4Zm-4 8 4 2 4-2v4l-4 2-4-2v-4Z" fill="currentColor" />
+            </svg>
+          </div>
+          <span>Grootste open offerte</span>
+          <strong>{kpis.largestOpenQuote ? kpis.largestOpenQuote.quoteNumber : '-'}</strong>
+          <small>{kpis.largestOpenQuote ? formatCurrency(kpis.largestOpenQuote.salesPrice) : 'Nog geen open waarde'}</small>
+        </article>
+
+        <article className="insight-card insight-activity">
+          <div className="insight-card-header">
+            <div>
+              <span>Laatste activiteit</span>
+              <strong>{kpis.recentActivity.length}</strong>
+            </div>
+          </div>
+          <div className="activity-list">
+            {kpis.recentActivity.length > 0 ? (
+              kpis.recentActivity.map((quote) => (
+                <div className="activity-row" key={quote.id}>
+                  <span>{new Date(quote.createdAt).toLocaleDateString('nl-NL', { day: '2-digit', month: 'short' })}</span>
+                  <strong>{quote.quoteNumber}</strong>
+                  <small>{quote.customerName || 'Onbekende klant'}</small>
+                </div>
+              ))
+            ) : (
+              <p>Geen recente activiteit.</p>
+            )}
+          </div>
+        </article>
       </div>
 
       <div className="dashboard-filters">
