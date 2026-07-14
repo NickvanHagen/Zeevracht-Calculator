@@ -343,11 +343,6 @@ function App() {
                 Dashboard
               </button>
             </nav>
-            <nav aria-label="Nieuwe calculatie" className="tab-nav">
-              <button className="tab-button toolbar-action-button" onClick={handleNewCalculation} type="button">
-                Nieuwe calculatie
-              </button>
-            </nav>
             <nav aria-label="Calculator" className="tab-nav toolbar-single-nav">
               <button
                 className={appView === 'calculator' ? 'tab-button active toolbar-action-button' : 'tab-button toolbar-action-button'}
@@ -359,6 +354,11 @@ function App() {
             </nav>
             {appView === 'calculator' ? (
               <>
+                <nav aria-label="Nieuwe calculatie" className="tab-nav">
+                  <button className="tab-button toolbar-action-button" onClick={handleNewCalculation} type="button">
+                    Nieuwe calculatie
+                  </button>
+                </nav>
                 <SegmentedControl
                   label="Transporttype"
                   onChange={setShipmentMode}
