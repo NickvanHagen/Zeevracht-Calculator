@@ -78,6 +78,27 @@ const tariffSet = {
       label: 'VGM fee',
     },
     {
+      amount: 17,
+      basis: 'per shipment',
+      chargeKey: 'solas_regulation',
+      currency: 'EUR',
+      label: 'SOLAS regulation',
+    },
+    {
+      amount: 17,
+      basis: 'per shipment',
+      chargeKey: 'solas_regulation_duplicate',
+      currency: 'EUR',
+      label: 'SOLAS regulation',
+    },
+    {
+      amount: 5,
+      basis: 'per package (if applicable)',
+      chargeKey: 'solas_weigh_shipment',
+      currency: 'EUR',
+      label: 'SOLAS regulation',
+    },
+    {
       amount: 160,
       basis: 'per shipment',
       chargeKey: 'imo_administration_fee',
@@ -126,9 +147,11 @@ const tariffSet = {
   assert.equal(result.charges.some((charge) => charge.country === 'USA'), false, 'Australia excludes USA charges');
   assert.deepEqual(
     result.charges.map((charge) => charge.label),
-    ['Export Service Fee', 'Emergency Congestion Surcharge', 'Emissions Trading System (ETS)', 'VGM fee'],
-    'Sydney only gets automatic standard export charges',
+    ['Export Service Fee', 'Emergency Congestion Surcharge', 'Emissions Trading System (ETS)', 'Origin VGM'],
+    'Sydney only gets automatic standard export charges once',
   );
+  assert.equal(result.charges.filter((charge) => charge.label === 'Origin VGM').length, 1, 'VGM/SOLAS is deduped');
+  assert.equal(result.charges.some((charge) => charge.totalEur === 5), false, 'optional SOLAS weighing fee excluded');
   near(result.totalEur, 39.168 / 1.144 + 12.096 + 5.76 + 5.76 + 17, 'Sydney total EUR');
 }
 

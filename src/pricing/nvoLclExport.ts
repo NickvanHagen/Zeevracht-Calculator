@@ -57,7 +57,7 @@ const STANDARD_EXPORT_CHARGE_LABELS = new Set([
   'emissions trading system (ets)',
   'export service fee',
   'loading charges > 5000 kgs',
-  'solas regulation',
+  'origin vgm',
   'vgm fee',
 ]);
 const COUNTRY_EXPORT_CHARGE_LABELS = new Set([
@@ -320,8 +320,59 @@ const calculateChargeTotal = (charge: NvoLclExportCharge, chargeableWm: number, 
   return charge.amount;
 };
 
-const isAutomaticExportCharge = (charge: NvoLclExportCharge) =>
-  charge.country ? isAutomaticCountryExportCharge(charge.label) : isAutomaticStandardExportCharge(charge.label);
+const normalizeExportCharge = (charge: NvoLclExportCharge): NvoLclExportCharge | undefined => {
+  const label = normalize(charge.label);
+  const basis = normalize(charge.basis);
+
+  if (label === 'solas regulation') {
+    if (charge.amount === 17 && basis.includes('shipment')) {
+      return {
+        ...charge,
+        chargeKey: 'origin_vgm',
+        label: 'Origin VGM',
+      };
+    }
+
+    return undefined;
+  }
+
+  if (label === 'vgm fee') {
+    return {
+      ...charge,
+      chargeKey: 'origin_vgm',
+      label: 'Origin VGM',
+    };
+  }
+
+  if (charge.country) {
+    return isAutomaticCountryExportCharge(charge.label) ? charge : undefined;
+  }
+
+  return isAutomaticStandardExportCharge(charge.label) ? charge : undefined;
+};
+
+const uniqueCharges = (charges: NvoLclExportCharge[]) => {
+  const seen = new Set<string>();
+
+  return charges.filter((charge) => {
+    const key = [
+      normalize(charge.country ?? ''),
+      normalize(charge.label),
+      normalizeCurrency(charge.currency),
+      charge.amount,
+      normalize(charge.basis),
+    ].join('|');
+
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+};
+
+const isDefinedCharge = (charge: NvoLclExportCharge | undefined): charge is NvoLclExportCharge => Boolean(charge);
 
 export function calculateNvoLclExportFob({
   cbm,
@@ -344,8 +395,7 @@ export function calculateNvoLclExportFob({
   const exchangeRate = tariffs?.exchangeRate ?? DEFAULT_EXCHANGE_RATE;
   const oceanFreight = Math.max(chargeableWm * rate.rateWm, rate.minimumRate);
   const oceanFreightEur = convertToEur(oceanFreight, rate.currency, exchangeRate);
-  const charges = (tariffs?.charges ?? [])
-    .filter(isAutomaticExportCharge)
+  const charges = uniqueCharges((tariffs?.charges ?? []).map(normalizeExportCharge).filter(isDefinedCharge))
     .filter((charge) => !charge.country || normalize(charge.country) === normalize(rate.country))
     .map((charge) => {
       const total = calculateChargeTotal(charge, chargeableWm, grossWeightKg);
