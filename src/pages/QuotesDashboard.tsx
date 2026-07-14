@@ -18,7 +18,9 @@ import { formatValidUntil, getDateInputValue, getQuoteValidityInfo } from '../ut
 import { StatisticCard } from '../components';
 
 type QuotesDashboardProps = {
+  mode?: 'dashboard' | 'quotes';
   onOpenQuote: (quote: SavedQuote) => void;
+  onShowQuotes?: () => void;
 };
 
 type SortKey = 'quoteNumber' | 'customerName' | 'salesPrice' | 'margin' | 'status' | 'validUntil' | 'createdAt';
@@ -212,6 +214,16 @@ const getActivity = (quote: SavedQuote): ActivityItem => {
   };
 };
 
+const isFollowUpDue = (quote: SavedQuote) => {
+  const validityInfo = getQuoteValidityInfo(quote.validUntil || quote.validity, quote.status);
+  const createdAt = new Date(quote.createdAt);
+  const ageInDays = Math.floor((Date.now() - createdAt.getTime()) / millisecondsPerDay);
+  const isPipelineQuote =
+    validityInfo.effectiveStatus !== 'Gewonnen' && validityInfo.effectiveStatus !== 'Verloren' && validityInfo.effectiveStatus !== 'Verlopen';
+
+  return isPipelineQuote && ageInDays >= 3;
+};
+
 const toText = (value: unknown) => (typeof value === 'string' ? value : '');
 
 const getQuoteMargin = (quote: SavedQuote) =>
@@ -302,7 +314,7 @@ const TrendChart = ({ data }: { data: Array<{ date: Date; value: number }> }) =>
   );
 };
 
-export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
+export function QuotesDashboard({ mode = 'dashboard', onOpenQuote, onShowQuotes }: QuotesDashboardProps) {
   const [quotes, setQuotes] = useState<SavedQuote[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -384,6 +396,11 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
     const nextUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
     window.history.pushState({}, '', nextUrl);
     applyQueryToFilters();
+  };
+
+  const showQuotesWithFilters = (nextFilters: Parameters<typeof setUrlFilters>[0]) => {
+    setUrlFilters(nextFilters);
+    onShowQuotes?.();
   };
 
   const updateUrlFromCurrentFilters = (
@@ -469,6 +486,7 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
     const decidedThisMonth = wonThisMonth.length + lostThisMonth.length;
     const conversion = decidedThisMonth > 0 ? (wonThisMonth.length / decidedThisMonth) * 100 : 0;
     const pipelineValue = pipelineQuotes.reduce((total, quote) => total + quote.salesPrice, 0);
+    const followUpQuotes = pipelineQuotes.filter(isFollowUpDue);
     const recentQuoteTrend = buildDailySeries(quotes, (quote) => quote.createdAt, () => 1);
     const wonTrend = buildDailySeries(
       quotes.filter((quote) => quote.status === 'Gewonnen'),
@@ -515,6 +533,7 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
       largestOpenQuote,
       lostThisMonth: lostThisMonth.length,
       lostTrend,
+      followUpQuotes,
       openCount: pipelineQuotes.length,
       pipelineValue,
       pipelineTrend,
@@ -733,50 +752,73 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
   const monthRange = getCurrentMonthRange();
   const revenueTrendTone = kpis.revenueChange > 0 ? 'positive' : kpis.revenueChange < 0 ? 'negative' : 'neutral';
   const routeForLargestQuote = kpis.largestOpenQuote ? getRouteParts(kpis.largestOpenQuote) : undefined;
+  const isQuotesView = mode === 'quotes';
 
   return (
-    <section className="dashboard-page">
+    <section className={isQuotesView ? 'dashboard-page quotes-page' : 'dashboard-page'}>
       <div className="dashboard-title-row">
         <div>
-          <h1>Dashboard</h1>
-          <p>Overzicht van al je offertes en prestaties.</p>
+          <h1>{isQuotesView ? 'Offertes' : 'Dashboard'}</h1>
+          <p>{isQuotesView ? 'Overzicht, opvolging en beheer van alle opgeslagen offertes.' : 'Overzicht van al je offertes en prestaties.'}</p>
         </div>
       </div>
 
-      <div className="dashboard-kpis" aria-label="Offerte statistieken">
+      <div className={isQuotesView ? 'dashboard-kpis quotes-kpis' : 'dashboard-kpis'} aria-label="Offerte statistieken">
         <StatisticCard
           accent="blue"
           ariaLabel="Filter op open offertes"
           icon={<svg height="24" viewBox="0 0 24 24" width="24"><path d="M7 3h7l5 5v13H7V3Zm7 1.8V9h4.2L14 4.8ZM9 13h8v2H9v-2Zm0 4h6v2H9v-2Z" fill="currentColor" /></svg>}
           label="Open offertes"
-          onClick={() => setUrlFilters({ status: 'pipeline' })}
+          onClick={() => showQuotesWithFilters({ status: 'pipeline' })}
           sparkline={kpis.recentQuoteTrend}
           value={String(kpis.openCount)}
         />
         <StatisticCard
-          accent="green"
-          ariaLabel="Filter op gewonnen offertes van deze maand"
-          icon={<svg height="24" viewBox="0 0 24 24" width="24"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5Zm-1 14.5-3.5-3.5L9 11.5l2 2 4.5-4.5L17 10.5l-6 6Z" fill="currentColor" /></svg>}
-          label="Gewonnen deze maand"
-          onClick={() => setUrlFilters({ dateFrom: monthRange.start, dateTo: monthRange.end, status: 'Gewonnen' })}
-          sparkline={kpis.wonTrend}
-          value={String(kpis.wonThisMonth)}
+          accent="orange"
+          ariaLabel="Filter op offertes die binnen 7 dagen verlopen"
+          icon={<svg height="24" viewBox="0 0 24 24" width="24"><path d="M12 2 2 20h20L12 2Zm1 14h-2v-2h2v2Zm0-4h-2V8h2v4Z" fill="currentColor" /></svg>}
+          label="Verloopt binnen 7 dagen"
+          onClick={() => showQuotesWithFilters({ expiringWithin: '7' })}
+          value={String(kpis.expiringSoonQuotes.length)}
         />
-        <StatisticCard
-          accent="red"
-          ariaLabel="Filter op verloren offertes van deze maand"
-          icon={<svg height="24" viewBox="0 0 24 24" width="24"><path d="M11 3h2v11h-2V3Zm0 14h2v4h-2v-4ZM5 5h4v2H7v10h2v2H5V5Zm10 0h4v14h-4v-2h2V7h-2V5Z" fill="currentColor" /></svg>}
-          label="Verloren deze maand"
-          onClick={() => setUrlFilters({ dateFrom: monthRange.start, dateTo: monthRange.end, status: 'Verloren' })}
-          sparkline={kpis.lostTrend}
-          value={String(kpis.lostThisMonth)}
-        />
+        {isQuotesView ? (
+          <StatisticCard
+            accent="purple"
+            ariaLabel="Filter op offertes die opgevolgd moeten worden"
+            icon={<svg height="24" viewBox="0 0 24 24" width="24"><path d="M12 2a10 10 0 1 0 10 10h-2a8 8 0 1 1-2.35-5.65L15 9h7V2l-2.9 2.9A10 10 0 0 0 12 2Zm1 5h-2v6l5 3 1-1.73-4-2.27V7Z" fill="currentColor" /></svg>}
+            label="Opvolgen"
+            onClick={() => showQuotesWithFilters({ status: 'pipeline' })}
+            subValue="Ouder dan 3 dagen"
+            value={String(kpis.followUpQuotes.length)}
+          />
+        ) : (
+          <>
+            <StatisticCard
+              accent="green"
+              ariaLabel="Filter op gewonnen offertes van deze maand"
+              icon={<svg height="24" viewBox="0 0 24 24" width="24"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5Zm-1 14.5-3.5-3.5L9 11.5l2 2 4.5-4.5L17 10.5l-6 6Z" fill="currentColor" /></svg>}
+              label="Gewonnen deze maand"
+              onClick={() => showQuotesWithFilters({ dateFrom: monthRange.start, dateTo: monthRange.end, status: 'Gewonnen' })}
+              sparkline={kpis.wonTrend}
+              value={String(kpis.wonThisMonth)}
+            />
+            <StatisticCard
+              accent="red"
+              ariaLabel="Filter op verloren offertes van deze maand"
+              icon={<svg height="24" viewBox="0 0 24 24" width="24"><path d="M11 3h2v11h-2V3Zm0 14h2v4h-2v-4ZM5 5h4v2H7v10h2v2H5V5Zm10 0h4v14h-4v-2h2V7h-2V5Z" fill="currentColor" /></svg>}
+              label="Verloren deze maand"
+              onClick={() => showQuotesWithFilters({ dateFrom: monthRange.start, dateTo: monthRange.end, status: 'Verloren' })}
+              sparkline={kpis.lostTrend}
+              value={String(kpis.lostThisMonth)}
+            />
+          </>
+        )}
         <StatisticCard
           accent="purple"
           ariaLabel="Bekijk conversie-inzicht"
           icon={<svg height="24" viewBox="0 0 24 24" width="24"><path d="M13 2v9h9a10 10 0 1 1-9-9Zm2 2.3V9h4.7A8.1 8.1 0 0 0 15 4.3Z" fill="currentColor" /></svg>}
           label="Conversie"
-          onClick={() => document.querySelector('.dashboard-insights')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          onClick={() => (isQuotesView ? showQuotesWithFilters({}) : document.querySelector('.dashboard-insights')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))}
           sparkline={[kpis.lostThisMonth, kpis.wonThisMonth, kpis.conversion]}
           value={`${kpis.conversion.toLocaleString('nl-NL', { maximumFractionDigits: 1 })}%`}
         />
@@ -785,13 +827,14 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
           ariaLabel="Filter op omzet in pijplijn"
           icon={<svg height="24" viewBox="0 0 24 24" width="24"><path d="M12 3 4 7v6c0 4.5 3.4 7.5 8 8 4.6-.5 8-3.5 8-8V7l-8-4Zm0 4a3 3 0 0 1 3 3h-2a1 1 0 1 0-1 1 3 3 0 1 1-3 3h2a1 1 0 1 0 1-1 3 3 0 0 1 0-6Z" fill="currentColor" /></svg>}
           label="Omzet in pijplijn"
-          onClick={() => setUrlFilters({ status: 'pipeline' })}
+          onClick={() => showQuotesWithFilters({ status: 'pipeline' })}
           sparkline={kpis.pipelineTrend}
           subValue={`${kpis.openCount} ${kpis.openCount === 1 ? 'offerte' : 'offertes'}`}
           value={formatCurrency(kpis.pipelineValue)}
         />
       </div>
 
+      {!isQuotesView ? (
       <div className="dashboard-insights" aria-label="Dashboard inzichten">
         <article className="insight-card insight-card-wide">
           <div className="insight-card-header">
@@ -934,7 +977,10 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
           </div>
         </article>
       </div>
+      ) : null}
 
+      {isQuotesView ? (
+      <>
       <div className="dashboard-filters">
         <label className="field" htmlFor="quote-search">
           <span>Zoeken</span>
@@ -1170,6 +1216,8 @@ export function QuotesDashboard({ onOpenQuote }: QuotesDashboardProps) {
             </div>
           </div>
         </div>
+      ) : null}
+      </>
       ) : null}
     </section>
   );

@@ -1250,6 +1250,54 @@ h1 {
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
+.quotes-page {
+  gap: 14px;
+}
+
+.quotes-page .dashboard-title-row {
+  padding-bottom: 0;
+}
+
+.quotes-kpis {
+  gap: 10px;
+}
+
+.quotes-kpis .stat-card {
+  border-radius: 12px;
+  gap: 8px;
+  min-height: 96px;
+  padding: 14px 16px;
+}
+
+.quotes-kpis .stat-icon {
+  border-radius: 10px;
+  height: 34px;
+  width: 38px;
+}
+
+.quotes-kpis .stat-icon svg {
+  height: 18px;
+  width: 18px;
+}
+
+.quotes-kpis .stat-copy span {
+  font-size: 0.75rem;
+}
+
+.quotes-kpis .stat-copy strong {
+  font-size: 1.45rem;
+}
+
+.quotes-kpis .stat-copy small {
+  font-size: 0.72rem;
+}
+
+.quotes-kpis .stat-sparkline {
+  height: 28px;
+  opacity: 0.34;
+  width: 34%;
+}
+
 .stat-card {
   align-items: start;
   background:

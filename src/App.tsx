@@ -48,7 +48,7 @@ function App() {
   const [loginError, setLoginError] = useState('');
   const [shipmentMode, setShipmentMode] = useState<ShipmentMode>('lcl');
   const [direction, setDirection] = useState<ShipmentDirection>('import');
-  const [appView, setAppView] = useState<'calculator' | 'quotes'>('calculator');
+  const [appView, setAppView] = useState<'calculator' | 'dashboard' | 'quotes'>('dashboard');
   const [openedQuote, setOpenedQuote] = useState<SavedQuote | undefined>();
   const [newCalculationToken, setNewCalculationToken] = useState(0);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
@@ -335,6 +335,16 @@ function App() {
           </div>
           <div className="app-actions">
             <button
+              className={appView === 'quotes' ? 'top-action secondary active' : 'top-action secondary'}
+              onClick={() => setAppView('quotes')}
+              type="button"
+            >
+              <svg aria-hidden="true" height="18" viewBox="0 0 24 24" width="18">
+                <path d="M6 3h12a2 2 0 0 1 2 2v14H4V5a2 2 0 0 1 2-2Zm0 4h12V5H6v2Zm0 4h12V9H6v2Zm0 4h8v-2H6v2Z" fill="currentColor" />
+              </svg>
+              Offertes
+            </button>
+            <button
               className={appView === 'calculator' ? 'top-action primary active' : 'top-action primary'}
               onClick={() => setAppView('calculator')}
               type="button"
@@ -458,8 +468,8 @@ function App() {
         <div className="app-nav-strip">
           <nav aria-label="Hoofdnavigatie" className="dashboard-nav">
             <button
-              className={appView === 'quotes' ? 'dashboard-nav-button active' : 'dashboard-nav-button'}
-              onClick={() => setAppView('quotes')}
+              className={appView === 'dashboard' ? 'dashboard-nav-button active' : 'dashboard-nav-button'}
+              onClick={() => setAppView('dashboard')}
               type="button"
             >
               <svg aria-hidden="true" height="18" viewBox="0 0 24 24" width="18">
@@ -487,8 +497,10 @@ function App() {
         </div>
       </header>
 
-      {appView === 'quotes' ? (
-        <QuotesDashboard onOpenQuote={handleOpenQuote} />
+      {appView === 'dashboard' ? (
+        <QuotesDashboard mode="dashboard" onOpenQuote={handleOpenQuote} onShowQuotes={() => setAppView('quotes')} />
+      ) : appView === 'quotes' ? (
+        <QuotesDashboard mode="quotes" onOpenQuote={handleOpenQuote} />
       ) : shipmentMode === 'lcl' ? (
         <LclPage
           direction={direction}
