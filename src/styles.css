@@ -336,6 +336,11 @@ select {
   color: var(--accent-strong);
 }
 
+.compact-status {
+  font-size: 0.78rem;
+  margin-top: 8px;
+}
+
 .settings-warning {
   color: #a46000;
 }

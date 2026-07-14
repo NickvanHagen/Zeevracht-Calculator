@@ -1012,6 +1012,64 @@ as $$
   );
 $$;
 
+insert into public.app_settings (key, value)
+values
+  ('lcl_diesel_percentage', '27'),
+  ('lcl_road_charge_percentage', '5.9')
+on conflict (key) do nothing;
+
+drop function if exists public.get_lcl_surcharges();
+create or replace function public.get_lcl_surcharges()
+returns table (diesel_percentage text, road_charge_percentage text)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform public.current_tff_user_id();
+
+  return query
+  select
+    coalesce((select value from public.app_settings where key = 'lcl_diesel_percentage'), '27') as diesel_percentage,
+    coalesce((select value from public.app_settings where key = 'lcl_road_charge_percentage'), '5.9') as road_charge_percentage;
+end;
+$$;
+
+drop function if exists public.update_lcl_surcharges(numeric, numeric);
+create or replace function public.update_lcl_surcharges(
+  p_diesel_percentage numeric,
+  p_road_charge_percentage numeric
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform public.current_tff_user_id();
+
+  if p_diesel_percentage is null or p_diesel_percentage < 0 then
+    raise exception 'Dieseltoeslag moet 0 of hoger zijn';
+  end if;
+
+  if p_road_charge_percentage is null or p_road_charge_percentage < 0 then
+    raise exception 'Kilometerheffing moet 0 of hoger zijn';
+  end if;
+
+  insert into public.app_settings (key, value, updated_at)
+  values ('lcl_diesel_percentage', trim(to_char(p_diesel_percentage, 'FM999999990.9999')), now())
+  on conflict (key) do update
+  set value = excluded.value,
+      updated_at = now();
+
+  insert into public.app_settings (key, value, updated_at)
+  values ('lcl_road_charge_percentage', trim(to_char(p_road_charge_percentage, 'FM999999990.9999')), now())
+  on conflict (key) do update
+  set value = excluded.value,
+      updated_at = now();
+end;
+$$;
+
 update public.profiles
 set full_name = public.format_tff_display_name(email, full_name),
     updated_at = now()
@@ -1464,6 +1522,8 @@ revoke all on function public.get_saved_quote(uuid) from public, anon;
 revoke all on function public.update_saved_quote_status(uuid, text) from public, anon;
 revoke all on function public.duplicate_saved_quote(uuid) from public, anon;
 revoke all on function public.delete_saved_quote(uuid) from public, anon;
+revoke all on function public.get_lcl_surcharges() from public, anon;
+revoke all on function public.update_lcl_surcharges(numeric, numeric) from public, anon;
 
 grant execute on function public.replace_nvo_lcl_import_rates(text, text, numeric, jsonb, jsonb) to authenticated;
 grant execute on function public.update_nvo_lcl_import_exchange_rate(uuid, numeric) to authenticated;
@@ -1475,3 +1535,5 @@ grant execute on function public.get_saved_quote(uuid) to authenticated;
 grant execute on function public.update_saved_quote_status(uuid, text) to authenticated;
 grant execute on function public.duplicate_saved_quote(uuid) to authenticated;
 grant execute on function public.delete_saved_quote(uuid) to authenticated;
+grant execute on function public.get_lcl_surcharges() to authenticated;
+grant execute on function public.update_lcl_surcharges(numeric, numeric) to authenticated;

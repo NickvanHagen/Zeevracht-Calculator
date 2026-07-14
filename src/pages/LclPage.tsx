@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Checkbox, InputField, NumberInput, ResultCard, SectionCard, SelectField } from '../components';
 import tffLogo from '../assets/tff-logo.png';
 import { customsFees } from '../config/customsFees';
-import { defaultSurcharges } from '../config/surcharges';
 import {
   calculateNvoLclExportFob,
   getNvoLclExportDestinationLabel,
@@ -15,6 +14,12 @@ import {
   type LclQuoteDetails,
   type LclQuoteLanguage,
 } from '../services/lclQuotePdfService';
+import {
+  defaultLclSurcharges,
+  fetchLclSurcharges,
+  saveLclSurcharges,
+  type LclSurcharges,
+} from '../services/lclSurchargeService';
 import { saveLclQuoteToSupabase, type QuoteStatus, type SavedQuote } from '../services/quoteService';
 import type { ShipmentDirection } from '../types/shipment';
 import { calculateLclCosts } from '../utils/calculateLclCosts';
@@ -79,13 +84,6 @@ const createPalletRow = (type: PalletType = 'europallet'): PalletRow => {
 const toNumber = (value: string) => Number(value.replace(',', '.')) || 0;
 const toText = (value: unknown) => (typeof value === 'string' ? value : '');
 const toBoolean = (value: unknown) => (typeof value === 'boolean' ? value : false);
-const LCL_DIESEL_STORAGE_KEY = 'tff-lcl-diesel-percentage';
-const LCL_ROAD_CHARGE_STORAGE_KEY = 'tff-lcl-road-charge-percentage';
-
-const getStoredPercentage = (key: string, fallback: number) => {
-  const storedValue = localStorage.getItem(key);
-  return storedValue && storedValue.trim() ? storedValue : String(fallback);
-};
 
 const toEditableAmount = (value: number) => (Number.isFinite(value) ? value.toFixed(2) : '');
 const toEditablePercentage = (value: number) => (Number.isFinite(value) ? value.toFixed(2).replace(/\.00$/, '') : '');
@@ -195,12 +193,12 @@ export function LclPage({
   const [savedQuoteId, setSavedQuoteId] = useState('');
   const [saveQuoteStatus, setSaveQuoteStatus] = useState('');
   const [saveQuoteError, setSaveQuoteError] = useState('');
-  const [dieselPercentage, setDieselPercentage] = useState(() =>
-    getStoredPercentage(LCL_DIESEL_STORAGE_KEY, defaultSurcharges.dieselPercentage),
-  );
-  const [roadChargePercentage, setRoadChargePercentage] = useState(
-    () => getStoredPercentage(LCL_ROAD_CHARGE_STORAGE_KEY, defaultSurcharges.roadChargePercentage),
-  );
+  const [centralSurcharges, setCentralSurcharges] = useState<LclSurcharges>(defaultLclSurcharges);
+  const [dieselPercentage, setDieselPercentage] = useState(defaultLclSurcharges.dieselPercentage);
+  const [roadChargePercentage, setRoadChargePercentage] = useState(defaultLclSurcharges.roadChargePercentage);
+  const [surchargeStatus, setSurchargeStatus] = useState('');
+  const hasLoadedSurcharges = useRef(false);
+  const shouldSaveSurcharges = useRef(false);
   const portSuggestions = useMemo(() => {
     const origins = new Set<string>();
     const destinations = new Set<string>();
@@ -224,13 +222,15 @@ export function LclPage({
   }, [isImport, nvoExportTariffs, nvoImportTariffs]);
 
   const updateDieselPercentage = (value: string) => {
+    shouldSaveSurcharges.current = true;
+    setCentralSurcharges((current) => ({ ...current, dieselPercentage: value }));
     setDieselPercentage(value);
-    localStorage.setItem(LCL_DIESEL_STORAGE_KEY, value);
   };
 
   const updateRoadChargePercentage = (value: string) => {
+    shouldSaveSurcharges.current = true;
+    setCentralSurcharges((current) => ({ ...current, roadChargePercentage: value }));
     setRoadChargePercentage(value);
-    localStorage.setItem(LCL_ROAD_CHARGE_STORAGE_KEY, value);
   };
 
   const updateMarginPercentage = (value: string) => {
@@ -241,6 +241,58 @@ export function LclPage({
   useEffect(() => {
     setCustomsSelected(false);
   }, [direction]);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    fetchLclSurcharges()
+      .then((surcharges) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        setCentralSurcharges(surcharges);
+        if (!openedQuote) {
+          setDieselPercentage(surcharges.dieselPercentage);
+          setRoadChargePercentage(surcharges.roadChargePercentage);
+        }
+        hasLoadedSurcharges.current = true;
+      })
+      .catch((error) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        hasLoadedSurcharges.current = true;
+        setSurchargeStatus(error instanceof Error ? error.message : 'LCL toeslagen konden niet centraal worden geladen.');
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [openedQuote]);
+
+  useEffect(() => {
+    if (!hasLoadedSurcharges.current || !shouldSaveSurcharges.current) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      saveLclSurcharges({
+        dieselPercentage,
+        roadChargePercentage,
+      })
+        .then(() => {
+          shouldSaveSurcharges.current = false;
+          setSurchargeStatus('LCL toeslagen centraal opgeslagen.');
+        })
+        .catch((error) => {
+          setSurchargeStatus(error instanceof Error ? error.message : 'LCL toeslagen konden niet centraal worden opgeslagen.');
+        });
+    }, 700);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [dieselPercentage, roadChargePercentage]);
 
   useEffect(() => {
     if (openedQuote) {
@@ -291,15 +343,15 @@ export function LclPage({
     setPricingInputMode(restoredSalesPriceInput ? 'sales' : 'margin');
     setDieselPercentage(
       toText(formState?.dieselPercentage) ||
-        getStoredPercentage(LCL_DIESEL_STORAGE_KEY, defaultSurcharges.dieselPercentage),
+        centralSurcharges.dieselPercentage,
     );
     setRoadChargePercentage(
       toText(formState?.roadChargePercentage) ||
-        getStoredPercentage(LCL_ROAD_CHARGE_STORAGE_KEY, defaultSurcharges.roadChargePercentage),
+        centralSurcharges.roadChargePercentage,
     );
     setSaveQuoteStatus(`Offerte ${openedQuote.quoteNumber} geopend.`);
     setSaveQuoteError('');
-  }, [openedQuote]);
+  }, [centralSurcharges.dieselPercentage, centralSurcharges.roadChargePercentage, openedQuote]);
 
   useEffect(() => {
     if (newCalculationToken === 0) {
@@ -321,11 +373,11 @@ export function LclPage({
     setQuoteNumber('');
     setQuoteStatus('Concept');
     setSavedQuoteId('');
-    setDieselPercentage(getStoredPercentage(LCL_DIESEL_STORAGE_KEY, defaultSurcharges.dieselPercentage));
-    setRoadChargePercentage(getStoredPercentage(LCL_ROAD_CHARGE_STORAGE_KEY, defaultSurcharges.roadChargePercentage));
+    setDieselPercentage(centralSurcharges.dieselPercentage);
+    setRoadChargePercentage(centralSurcharges.roadChargePercentage);
     setSaveQuoteStatus('Nieuwe calculatie gestart.');
     setSaveQuoteError('');
-  }, [direction, newCalculationToken, openedQuote]);
+  }, [centralSurcharges.dieselPercentage, centralSurcharges.roadChargePercentage, direction, newCalculationToken, openedQuote]);
 
   const totals = useMemo(
     () =>
@@ -872,7 +924,7 @@ export function LclPage({
 
         <SectionCard
           title="LCL zeevracht en transporttoeslagen"
-          description="Deze dieseltoeslag en kilometerheffing worden voor LCL onthouden wanneer je ze wijzigt."
+          description="Deze LCL dieseltoeslag en kilometerheffing worden centraal opgeslagen voor iedereen."
         >
           <form className="form-grid">
             <NumberInput
@@ -920,6 +972,7 @@ export function LclPage({
               />
             </div>
           </form>
+          {surchargeStatus ? <p className="settings-status compact-status">{surchargeStatus}</p> : null}
         </SectionCard>
       </div>
 
