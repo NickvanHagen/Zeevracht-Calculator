@@ -485,11 +485,11 @@ export function LclPage({
           })),
         ]
       : []),
-    { label: 'Totaal', section: 'Zeevracht', value: formatCurrency(effectiveOceanFreightAmount), emphasis: true },
+    { label: 'Totaal zeevracht', section: 'Zeevracht', value: formatCurrency(effectiveOceanFreightAmount), emphasis: true },
     { label: 'Sluyter tarief', section: 'Transport', value: selectedRate ? formatCurrency(baseRate) : 'Op aanvraag' },
     { label: `Kilometerheffing ${formatNumber(toNumber(roadChargePercentage))}%`, section: 'Transport', value: formatCurrency(roadCharge) },
     { label: `Dieseltoeslag ${formatNumber(toNumber(dieselPercentage))}%`, section: 'Transport', value: formatCurrency(dieselCharge) },
-    { label: 'Totaal', section: 'Transport', value: selectedRate ? formatCurrency(transportTotal) : 'Op aanvraag', emphasis: true },
+    { label: 'Totaal transport', section: 'Transport', value: selectedRate ? formatCurrency(transportTotal) : 'Op aanvraag', emphasis: true },
     ...(customsSelected
       ? [{ label: isImport ? 'Inklaring' : 'Uitklaring', section: 'Douane', value: formatCurrency(customsCharge) }]
       : []),
