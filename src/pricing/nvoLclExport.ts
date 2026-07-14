@@ -52,6 +52,25 @@ const RATE_FILE_FILTER = {
   provider: 'NVO',
   rate_type: 'lcl_export',
 };
+const STANDARD_EXPORT_CHARGE_LABELS = new Set([
+  'emergency congestion surcharge',
+  'emissions trading system (ets)',
+  'export service fee',
+  'loading charges > 5000 kgs',
+  'solas regulation',
+  'vgm fee',
+]);
+const COUNTRY_EXPORT_CHARGE_LABELS = new Set([
+  'afr filing fee',
+  'ams filing fee',
+  'ams filing mexico',
+  'cmf filing fee',
+  'documentation fee',
+  'e-manifest filing',
+  'mpci filing',
+  'sa filing fee',
+  'waiver',
+]);
 
 const normalize = (value: string) => value.toLowerCase().replace(/\s+/g, ' ').trim();
 const normalizeCurrency = (currency: string) => currency.toUpperCase().replace('EURO', 'EUR');
@@ -88,6 +107,9 @@ const convertToEur = (amount: number, currency: string, exchangeRate: number) =>
 
 const findColumn = (headerRow: unknown[], label: string) =>
   headerRow.findIndex((cell) => normalize(getCellText(cell)) === normalize(label));
+
+const isAutomaticStandardExportCharge = (label: string) => STANDARD_EXPORT_CHARGE_LABELS.has(normalize(label));
+const isAutomaticCountryExportCharge = (label: string) => COUNTRY_EXPORT_CHARGE_LABELS.has(normalize(label));
 
 type XlsxModule = typeof import('xlsx');
 
@@ -175,18 +197,36 @@ function parseExportCharges(xlsx: XlsxModule, workbook: WorkBook): NvoLclExportC
 
   const rows = xlsx.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
   const charges: NvoLclExportCharge[] = [];
+  let onlyApplicableCharges = false;
+  let currentApplicableGroup = '';
 
   rows.forEach((row) => {
     const rowText = row.map(getCellText).join(' ').toLowerCase();
-    const label = getCellText(row[1]);
+    const baseLabel = getCellText(row[1]);
     const country = getCellText(row[2]);
-    const countryLabel = getCellText(row[3]);
+    const detailLabel = getCellText(row[3]);
     const currency = normalizeCurrency(getCellText(row[6]));
     const amount = parseNumber(row[7]);
     const basis = getCellText(row[8]);
 
-    if (['euro', 'eur', 'usd'].includes(normalize(currency)) && amount > 0) {
-      if (label && !rowText.includes('below charges')) {
+    if (rowText.includes('below charges')) {
+      onlyApplicableCharges = true;
+      currentApplicableGroup = '';
+      return;
+    }
+
+    if (baseLabel) {
+      currentApplicableGroup = baseLabel;
+    }
+
+    if (!['eur', 'usd'].includes(normalize(currency)) || amount <= 0) {
+      return;
+    }
+
+    if (!onlyApplicableCharges) {
+      const label = detailLabel || baseLabel;
+
+      if (label && isAutomaticStandardExportCharge(label)) {
         charges.push({
           amount,
           basis,
@@ -196,14 +236,20 @@ function parseExportCharges(xlsx: XlsxModule, workbook: WorkBook): NvoLclExportC
         });
       }
 
-      if (country && countryLabel) {
+      return;
+    }
+
+    if (country) {
+      const label = detailLabel || currentApplicableGroup;
+
+      if (label && isAutomaticCountryExportCharge(label)) {
         charges.push({
           amount,
           basis,
-          chargeKey: `country_${slugify(country)}_${slugify(countryLabel)}`,
+          chargeKey: `country_${slugify(country)}_${slugify(label)}`,
           country,
           currency,
-          label: countryLabel,
+          label,
         });
       }
     }
@@ -274,6 +320,9 @@ const calculateChargeTotal = (charge: NvoLclExportCharge, chargeableWm: number, 
   return charge.amount;
 };
 
+const isAutomaticExportCharge = (charge: NvoLclExportCharge) =>
+  charge.country ? isAutomaticCountryExportCharge(charge.label) : isAutomaticStandardExportCharge(charge.label);
+
 export function calculateNvoLclExportFob({
   cbm,
   destinationCfs,
@@ -296,6 +345,7 @@ export function calculateNvoLclExportFob({
   const oceanFreight = Math.max(chargeableWm * rate.rateWm, rate.minimumRate);
   const oceanFreightEur = convertToEur(oceanFreight, rate.currency, exchangeRate);
   const charges = (tariffs?.charges ?? [])
+    .filter(isAutomaticExportCharge)
     .filter((charge) => !charge.country || normalize(charge.country) === normalize(rate.country))
     .map((charge) => {
       const total = calculateChargeTotal(charge, chargeableWm, grossWeightKg);

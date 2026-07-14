@@ -19,8 +19,8 @@ const tariffSet = {
       collect: 'Y',
       country: 'Australia',
       currency: 'USD',
-      destinationCfs: 'Adelaide',
-      destinationUnlo: 'AUADL',
+      destinationCfs: 'Sydney',
+      destinationUnlo: 'AUSYD',
       frequency: 'Weekly',
       imo: 'R',
       minimumRate: 34,
@@ -78,6 +78,13 @@ const tariffSet = {
       label: 'VGM fee',
     },
     {
+      amount: 160,
+      basis: 'per shipment',
+      chargeKey: 'imo_administration_fee',
+      currency: 'EUR',
+      label: 'IMO Administration fee',
+    },
+    {
       amount: 42.5,
       basis: 'per entry',
       chargeKey: 'country_usa_ams_filing_fee',
@@ -85,31 +92,44 @@ const tariffSet = {
       currency: 'EUR',
       label: 'AMS Filing Fee',
     },
+    {
+      amount: 50,
+      basis: 'per entry',
+      chargeKey: 'country_brasil_manifest_correction',
+      country: 'Brasil',
+      currency: 'EUR',
+      label: 'Manifest correction',
+    },
   ],
 };
 
 {
   const rate = tariffSet.rates[0];
-  assert.equal(getNvoLclExportDestinationLabel(rate), 'Adelaide via Singapore', 'export destination label');
-  assert.equal(findNvoLclExportRate(tariffSet, 'Adelaide')?.destinationUnlo, 'AUADL', 'find by discharge port');
-  assert.equal(findNvoLclExportRate(tariffSet, 'Adelaide via Singapore')?.destinationUnlo, 'AUADL', 'find by route label');
-  assert.equal(findNvoLclExportRate(tariffSet, 'AUADL')?.destinationCfs, 'Adelaide', 'find by UNLO');
+  assert.equal(getNvoLclExportDestinationLabel(rate), 'Sydney via Singapore', 'export destination label');
+  assert.equal(findNvoLclExportRate(tariffSet, 'Sydney')?.destinationUnlo, 'AUSYD', 'find by discharge port');
+  assert.equal(findNvoLclExportRate(tariffSet, 'Sydney via Singapore')?.destinationUnlo, 'AUSYD', 'find by route label');
+  assert.equal(findNvoLclExportRate(tariffSet, 'AUSYD')?.destinationCfs, 'Sydney', 'find by UNLO');
 }
 
 {
   const result = calculateNvoLclExportFob({
-    cbm: 1.2,
-    destinationCfs: 'Adelaide via Singapore',
+    cbm: 1.152,
+    destinationCfs: 'Sydney via Singapore',
     grossWeightKg: 400,
     tariffs: tariffSet,
   });
 
-  assert.ok(result, 'Adelaide export result');
-  near(result.chargeableWm, 1.2, 'Adelaide chargeable W/M');
-  near(result.oceanFreight, 40.8, 'Adelaide ocean freight USD');
-  near(result.oceanFreightEur, 40.8 / 1.144, 'Adelaide ocean freight EUR');
+  assert.ok(result, 'Sydney export result');
+  near(result.chargeableWm, 1.152, 'Sydney chargeable W/M');
+  near(result.oceanFreight, 39.168, 'Sydney ocean freight USD');
+  near(result.oceanFreightEur, 39.168 / 1.144, 'Sydney ocean freight EUR');
   assert.equal(result.charges.some((charge) => charge.country === 'USA'), false, 'Australia excludes USA charges');
-  near(result.totalEur, 40.8 / 1.144 + 12.6 + 6 + 6 + 17, 'Adelaide total EUR');
+  assert.deepEqual(
+    result.charges.map((charge) => charge.label),
+    ['Export Service Fee', 'Emergency Congestion Surcharge', 'Emissions Trading System (ETS)', 'VGM fee'],
+    'Sydney only gets automatic standard export charges',
+  );
+  near(result.totalEur, 39.168 / 1.144 + 12.096 + 5.76 + 5.76 + 17, 'Sydney total EUR');
 }
 
 {
