@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Checkbox, InputField, NumberInput, ResultCard, SectionCard, SelectField } from '../components';
+import quoteHarborBanner from '../assets/quote-harbor-banner.png';
 import tffLogo from '../assets/tff-logo.png';
 import { customsFees } from '../config/customsFees';
 import {
@@ -648,6 +649,7 @@ export function LclPage({
     }
 
     generateLclQuotePdf({
+      bannerUrl: quoteHarborBanner,
       details: quoteDetails,
       direction,
       language,

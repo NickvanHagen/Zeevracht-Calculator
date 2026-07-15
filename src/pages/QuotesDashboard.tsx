@@ -10,6 +10,7 @@ import {
   type QuoteStatus,
   type SavedQuote,
 } from '../services/quoteService';
+import quoteHarborBanner from '../assets/quote-harbor-banner.png';
 import tffLogo from '../assets/tff-logo.png';
 import { generateLclQuotePdf, type LclQuoteDetails, type LclQuotePalletLine } from '../services/lclQuotePdfService';
 import { formatCurrency } from '../utils/formatCurrency';
@@ -767,6 +768,7 @@ export function QuotesDashboard({ currentUserEmail = '', mode = 'dashboard', onO
     }
 
     generateLclQuotePdf({
+      bannerUrl: quoteHarborBanner,
       details: getQuoteDetails(quote),
       direction: quote.direction,
       language: 'nl',

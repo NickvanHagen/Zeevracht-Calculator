@@ -26,6 +26,7 @@ export type LclQuotePalletLine = {
 export type LclQuoteLanguage = 'nl' | 'en';
 
 export type LclQuotePdfInput = {
+  bannerUrl?: string;
   direction: ShipmentDirection;
   details: LclQuoteDetails;
   language: LclQuoteLanguage;
@@ -237,6 +238,47 @@ async function loadLogoForPdf(logoUrl: string): Promise<PdfImage | undefined> {
   }
 }
 
+async function loadBannerForPdf(bannerUrl?: string): Promise<PdfImage | undefined> {
+  if (!bannerUrl) {
+    return undefined;
+  }
+
+  try {
+    const image = new Image();
+    image.src = bannerUrl;
+    await image.decode();
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 900;
+    canvas.height = 330;
+
+    const context = canvas.getContext('2d');
+    if (!context) {
+      return undefined;
+    }
+
+    const imageRatio = image.naturalWidth / image.naturalHeight;
+    const canvasRatio = canvas.width / canvas.height;
+    const sourceHeight = imageRatio > canvasRatio ? image.naturalHeight : image.naturalWidth / canvasRatio;
+    const sourceWidth = imageRatio > canvasRatio ? image.naturalHeight * canvasRatio : image.naturalWidth;
+    const sourceX = (image.naturalWidth - sourceWidth) / 2;
+    const sourceY = (image.naturalHeight - sourceHeight) / 2;
+
+    context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, canvas.width, canvas.height);
+
+    const overlay = context.createLinearGradient(0, 0, canvas.width, 0);
+    overlay.addColorStop(0, 'rgba(255,255,255,0.08)');
+    overlay.addColorStop(0.58, 'rgba(11,111,203,0.02)');
+    overlay.addColorStop(1, 'rgba(18,58,99,0.22)');
+    context.fillStyle = overlay;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+
+    return canvasToPdfImage(canvas, 0.9);
+  } catch {
+    return undefined;
+  }
+}
+
 function createHarborBannerForPdf(): PdfImage | undefined {
   const canvas = document.createElement('canvas');
   canvas.width = 900;
@@ -363,6 +405,7 @@ function createPdfBlob(pageContents: string[], images: Record<string, PdfImage |
 }
 
 export async function generateLclQuotePdf({
+  bannerUrl,
   details,
   direction,
   language,
@@ -396,7 +439,7 @@ export async function generateLclQuotePdf({
   popup.document.write('<p style="font-family: Arial, sans-serif; color: #17324a;">PDF wordt gemaakt...</p>');
 
   const logo = await loadLogoForPdf(logoUrl);
-  const banner = createHarborBannerForPdf();
+  const banner = (await loadBannerForPdf(bannerUrl)) ?? createHarborBannerForPdf();
   const pages: string[] = [];
   let content = '';
   const left = 42;
@@ -462,23 +505,37 @@ export async function generateLclQuotePdf({
   const addSectionTitle = (title: string, x: number, y: number) => {
     addText(title, x + 22, y, 15, colors.blueDark);
   };
-
-  if (logo) {
-    const logoWidth = 116;
-    const logoHeight = (logo.height / logo.width) * logoWidth;
-    content += `q ${logoWidth} 0 0 ${logoHeight} ${left} 752 cm /Logo Do Q\n`;
-  } else {
-    addText('TFF', left, 776, 28, colors.blue);
-  }
+  const addFooterIcon = (kind: 'location' | 'phone' | 'mail' | 'web', x: number, y: number) => {
+    content += `${colors.blue} RG 0.8 w\n`;
+    if (kind === 'location') {
+      addCircle(x, y + 2, 3.2, colors.blue, 0.8);
+      content += `${x} ${y - 6} m ${x - 5} ${y + 1} ${x - 3} ${y + 8} ${x} ${y + 9} c ${x + 3} ${y + 8} ${x + 5} ${y + 1} ${x} ${y - 6} c S\n`;
+    } else if (kind === 'phone') {
+      content += `${x - 5} ${y + 7} m ${x - 2} ${y + 10} l ${x + 1} ${y + 6} l ${x - 1} ${y + 4} l ${x + 3} ${y} l ${x + 6} ${y + 2} l ${x + 8} ${y - 2} l ${x + 4} ${y - 5} c S\n`;
+    } else if (kind === 'mail') {
+      content += `${x - 7} ${y - 4} 14 10 re S ${x - 7} ${y + 6} m ${x} ${y} l ${x + 7} ${y + 6} l S\n`;
+    } else {
+      addCircle(x, y + 1, 6.2, colors.blue, 0.8);
+      content += `${x - 6} ${y + 1} m ${x + 6} ${y + 1} l ${x} ${y - 5} m ${x} ${y + 7} l S\n`;
+    }
+  };
 
   if (banner) {
-    content += `q 230 0 0 104 365 738 cm /Banner Do Q\n`;
+    content += `q 245 0 0 116 350 726 cm /Banner Do Q\n`;
     content += `q ${colors.white} rg 0 842 m 344 842 l 392 738 l 0 738 l h f Q\n`;
     content += `${colors.blue} RG 12 w 352 842 m 383 793 423 761 500 742 c S\n`;
     content += `0.45 0.75 0.93 RG 17 w 371 842 m 403 797 440 766 515 742 c S\n`;
   }
 
-  addText('Team Freight Forwarding', left + 2, 748, 11, colors.blue);
+  if (logo) {
+    const logoWidth = 132;
+    const logoHeight = (logo.height / logo.width) * logoWidth;
+    content += `q ${logoWidth} 0 0 ${logoHeight} ${left} 756 cm /Logo Do Q\n`;
+  } else {
+    addText('TFF', left, 779, 30, colors.blue);
+  }
+
+  addText('Team Freight Forwarding', left + 2, 747, 11, colors.blue);
   addLine(left, 724, 365, colors.border, 0.8);
   addText(copy.lclQuote, left, 688, 32, colors.blueDark);
 
@@ -508,13 +565,13 @@ export async function generateLclQuotePdf({
     addText(value, 370, rowY - 8, 10.5, colors.blueDark);
   });
 
-  const sectionY = 515;
+  const sectionY = 498;
   addSectionTitle(copy.palletDetails, left, sectionY);
   content += `${colors.blue} RG 1.4 w ${left + 2} ${sectionY + 1} m ${left + 14} ${sectionY + 1} l ${left + 14} ${sectionY + 13} l ${left + 2} ${sectionY + 13} l h S\n`;
   content += `${colors.blue} RG 1 w ${left + 5} ${sectionY + 13} m ${left + 5} ${sectionY + 17} l ${left + 11} ${sectionY + 17} l ${left + 11} ${sectionY + 13} l S\n`;
 
   const tableX = left;
-  const tableTop = 486;
+  const tableTop = 468;
   const tableWidth = 511;
   const tableHeaderHeight = 24;
   const rows = palletLines.filter((palletLine) => Number(palletLine.quantity) > 0);
@@ -580,11 +637,15 @@ export async function generateLclQuotePdf({
 
   addLine(left, 60, right, colors.blue, 0.9);
   addText('Team Freight Forwarding', left, 43, 8.5, colors.blue);
-  addText('Marconiweg 14', left, 30, 7.6, colors.text);
-  addText('8501 XM Joure, Nederland', left, 20, 7.6, colors.text);
-  addText('T +31 (0)513 745 220', 218, 43, 7.8, colors.text);
-  addText('E ocean@tfflogistics.com', 218, 30, 7.8, colors.blue);
-  addText('W www.tfflogistics.com', 218, 20, 7.8, colors.blue);
+  addFooterIcon('location', left + 5, 27);
+  addText('Marconiweg 14', left + 18, 30, 7.6, colors.text);
+  addText('8501 XM Joure, Nederland', left + 18, 20, 7.6, colors.text);
+  addFooterIcon('phone', 222, 38);
+  addFooterIcon('mail', 222, 27);
+  addFooterIcon('web', 222, 16);
+  addText('T +31 (0)513 745 220', 236, 43, 7.8, colors.text);
+  addText('E ocean@tfflogistics.com', 236, 30, 7.8, colors.blue);
+  addText('W www.tfflogistics.com', 236, 20, 7.8, colors.blue);
   addText('KvK: 69825033', 398, 43, 7.8, colors.text);
   addText('BTW: NL858027550B01', 398, 31, 7.8, colors.text);
   addText('IBAN: NL68 RABO 0162 6354 88', 398, 20, 7.8, colors.text);
