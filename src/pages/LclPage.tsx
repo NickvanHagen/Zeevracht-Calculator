@@ -14,7 +14,7 @@ import {
   generateLclQuotePdf,
   type LclQuoteDetails,
   type LclQuoteLanguage,
-} from '../services/lclQuotePdfService';
+} from '../services/lclQuotePdfClient';
 import {
   defaultLclSurcharges,
   fetchLclSurcharges,

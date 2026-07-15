@@ -12,7 +12,7 @@ import {
 } from '../services/quoteService';
 import quoteHarborBanner from '../assets/quote-harbor-banner.png';
 import tffLogo from '../assets/tff-logo.png';
-import { generateLclQuotePdf, type LclQuoteDetails, type LclQuotePalletLine } from '../services/lclQuotePdfService';
+import { generateLclQuotePdf, type LclQuoteDetails, type LclQuotePalletLine } from '../services/lclQuotePdfClient';
 import { formatCurrency } from '../utils/formatCurrency';
 import { formatNumber } from '../utils/formatNumber';
 import { formatDisplayName } from '../utils/formatDisplayName';

@@ -35,6 +35,7 @@ export type LclQuotePdfInput = {
   palletLines: LclQuotePalletLine[];
   quoteNumber?: string;
   salesPrice: string;
+  targetWindow?: Window | null;
 };
 
 const exportTerms = [
@@ -414,6 +415,7 @@ export async function generateLclQuotePdf({
   palletLines,
   quoteNumber,
   salesPrice,
+  targetWindow,
 }: LclQuotePdfInput) {
   const copy = labels[language];
   const quoteDate = new Intl.DateTimeFormat(language === 'en' ? 'en-GB' : 'nl-NL').format(new Date());
@@ -425,7 +427,7 @@ export async function generateLclQuotePdf({
       : direction === 'import'
         ? importTerms
         : exportTerms;
-  const popup = window.open('', '_blank');
+  const popup = targetWindow ?? window.open('', '_blank');
 
   if (!popup) {
     window.alert(
