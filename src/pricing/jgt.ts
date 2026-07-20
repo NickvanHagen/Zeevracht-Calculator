@@ -23,8 +23,14 @@ export type JgtFclCalculationInput = {
   marginPercentage: number;
   oceanFreight: number;
   terminal: FclTerminal;
-  visitSurcharge: FclVisitSurcharge;
+  dropoffVisitSurcharge: FclVisitSurcharge;
+  pickupVisitSurcharge: FclVisitSurcharge;
   weightCategory: FclWeightCategory;
+};
+
+export type JgtFclVisitSurchargeLine = {
+  amount: number;
+  label: string;
 };
 
 export type JgtFclCalculation = {
@@ -51,6 +57,7 @@ export type JgtFclCalculation = {
   totalPurchase: number;
   visitSurcharge: number;
   visitSurchargeLabel: string;
+  visitSurcharges: JgtFclVisitSurchargeLine[];
   weightCategory: FclWeightCategory;
 };
 
@@ -83,7 +90,8 @@ export function calculateJgtFcl(input: JgtFclCalculationInput): JgtFclCalculatio
   const km = place?.km ?? 0;
   const rateRow = findJgtRateRow(km);
   const terminal = jgtTerminalSurcharges[input.terminal];
-  const visitSurchargeDefinition = jgtVisitSurcharges[input.visitSurcharge];
+  const pickupVisitSurchargeDefinition = jgtVisitSurcharges[input.pickupVisitSurcharge];
+  const dropoffVisitSurchargeDefinition = jgtVisitSurcharges[input.dropoffVisitSurcharge];
   const dieselPercentage = toPositiveNumber(input.dieselPercentage);
   const marginPercentage = toPositiveNumber(input.marginPercentage);
   const oceanFreight = toPositiveNumber(input.oceanFreight);
@@ -103,7 +111,17 @@ export function calculateJgtFcl(input: JgtFclCalculationInput): JgtFclCalculatio
 
   const baseTransportRate = rateRow ? getRateAmountForContainer(rateRow, ratedContainerType) : 0;
   const terminalSurcharge = terminal.surcharge;
-  const visitSurcharge = visitSurchargeDefinition.surcharge;
+  const visitSurcharges = [
+    {
+      amount: pickupVisitSurchargeDefinition.surcharge,
+      label: `Bezoektoeslag uithalen - ${pickupVisitSurchargeDefinition.label.replace('Bezoektoeslag ', '')}`,
+    },
+    {
+      amount: dropoffVisitSurchargeDefinition.surcharge,
+      label: `Bezoektoeslag leeg inleveren - ${dropoffVisitSurchargeDefinition.label.replace('Bezoektoeslag ', '')}`,
+    },
+  ].filter((line) => line.amount > 0);
+  const visitSurcharge = visitSurcharges.reduce((total, line) => total + line.amount, 0);
   const dieselCharge = (baseTransportRate + terminalSurcharge) * (dieselPercentage / 100);
   const toll = (rateRow?.toll ?? 0) + terminal.toll;
   const totalPurchase =
@@ -144,7 +162,8 @@ export function calculateJgtFcl(input: JgtFclCalculationInput): JgtFclCalculatio
     toll,
     totalPurchase,
     visitSurcharge,
-    visitSurchargeLabel: visitSurchargeDefinition.label,
+    visitSurchargeLabel: visitSurcharges.map((line) => line.label).join(' + ') || 'Geen bezoektoeslag',
+    visitSurcharges,
     weightCategory: input.weightCategory,
   };
 }

@@ -31,7 +31,7 @@ const weightCategoryOptions: Array<{ label: string; value: FclWeightCategory }> 
 ];
 
 const visitSurchargeOptions: Array<{ label: string; value: FclVisitSurcharge }> = [
-  { label: 'Geen bezoektoeslag', value: 'none' },
+  { label: 'Geen', value: 'none' },
   { label: `RWG (${formatCurrency(jgtVisitSurcharges.rwg.surcharge)})`, value: 'rwg' },
   { label: `ECT/EMX/HPD2 (${formatCurrency(jgtVisitSurcharges.ectEmxHpd2.surcharge)})`, value: 'ectEmxHpd2' },
   { label: `Quay 1700/1718/1742/869/913 (${formatCurrency(jgtVisitSurcharges.quay.surcharge)})`, value: 'quay' },
@@ -44,7 +44,8 @@ export function FclPage({ direction }: FclPageProps) {
   const [containerType, setContainerType] = useState<ContainerType>('20ft');
   const [weightCategory, setWeightCategory] = useState<FclWeightCategory>('under18t');
   const [terminal, setTerminal] = useState<FclTerminal>('euromax');
-  const [visitSurcharge, setVisitSurcharge] = useState<FclVisitSurcharge>('none');
+  const [pickupVisitSurcharge, setPickupVisitSurcharge] = useState<FclVisitSurcharge>('none');
+  const [dropoffVisitSurcharge, setDropoffVisitSurcharge] = useState<FclVisitSurcharge>('none');
   const [dieselPercentage, setDieselPercentage] = useState('');
   const [oceanFreight, setOceanFreight] = useState('');
   const [customsSelected, setCustomsSelected] = useState(false);
@@ -72,7 +73,8 @@ export function FclPage({ direction }: FclPageProps) {
         marginPercentage: toNumber(marginPercentage),
         oceanFreight: toNumber(oceanFreight),
         terminal,
-        visitSurcharge,
+        dropoffVisitSurcharge,
+        pickupVisitSurcharge,
         weightCategory,
       }),
     [
@@ -86,7 +88,8 @@ export function FclPage({ direction }: FclPageProps) {
       marginPercentage,
       oceanFreight,
       terminal,
-      visitSurcharge,
+      dropoffVisitSurcharge,
+      pickupVisitSurcharge,
       weightCategory,
     ],
   );
@@ -117,8 +120,12 @@ export function FclPage({ direction }: FclPageProps) {
       label: `${calculation.terminalLabel} km-toeslag`,
       value: formatCurrency(calculation.terminalSurcharge),
     },
-    ...(calculation.visitSurcharge > 0
-      ? [{ label: calculation.visitSurchargeLabel, value: formatCurrency(calculation.visitSurcharge) }]
+    ...calculation.visitSurcharges.map((line) => ({
+      label: line.label,
+      value: formatCurrency(line.amount),
+    })),
+    ...(calculation.visitSurcharges.length > 1
+      ? [{ label: 'Totaal bezoektoeslag', value: formatCurrency(calculation.visitSurcharge) }]
       : []),
     {
       label: `Dieseltoeslag ${formatNumber(toNumber(dieselPercentage))}%`,
@@ -177,13 +184,26 @@ export function FclPage({ direction }: FclPageProps) {
             options={terminalOptions}
             value={terminal}
           />
-          <SelectField
-            label="Bezoektoeslag"
-            name="visitSurcharge"
-            onChange={(event) => setVisitSurcharge(event.target.value as FclVisitSurcharge)}
-            options={visitSurchargeOptions}
-            value={visitSurcharge}
-          />
+          <div className="visit-surcharge-card">
+            <div className="visit-surcharge-heading">
+              <span>Bezoektoeslagen</span>
+              <small>Geen dieseltoeslag over deze bedragen</small>
+            </div>
+            <SelectField
+              label="Uithalen"
+              name="pickupVisitSurcharge"
+              onChange={(event) => setPickupVisitSurcharge(event.target.value as FclVisitSurcharge)}
+              options={visitSurchargeOptions}
+              value={pickupVisitSurcharge}
+            />
+            <SelectField
+              label="Leeg inleveren"
+              name="dropoffVisitSurcharge"
+              onChange={(event) => setDropoffVisitSurcharge(event.target.value as FclVisitSurcharge)}
+              options={visitSurchargeOptions}
+              value={dropoffVisitSurcharge}
+            />
+          </div>
           <NumberInput
             label="Dieseltoeslag (%)"
             name="dieselPercentage"

@@ -28,7 +28,8 @@ const near = (actual, expected, message) => {
     marginPercentage: 0,
     oceanFreight: 0,
     terminal: 'euromax',
-    visitSurcharge: 'none',
+    pickupVisitSurcharge: 'none',
+    dropoffVisitSurcharge: 'none',
     weightCategory: 'under18t',
   });
 
@@ -54,7 +55,8 @@ const near = (actual, expected, message) => {
     marginPercentage: 20,
     oceanFreight: 0,
     terminal: 'delta',
-    visitSurcharge: 'none',
+    pickupVisitSurcharge: 'none',
+    dropoffVisitSurcharge: 'none',
     weightCategory: 'under18t',
   });
 
@@ -81,7 +83,8 @@ const near = (actual, expected, message) => {
     marginPercentage: -20,
     oceanFreight: -100,
     terminal: 'botlek',
-    visitSurcharge: 'none',
+    pickupVisitSurcharge: 'none',
+    dropoffVisitSurcharge: 'none',
     weightCategory: 'under18t',
   });
 
@@ -105,7 +108,8 @@ const near = (actual, expected, message) => {
     marginPercentage: 10,
     oceanFreight: 200,
     terminal: 'euromax',
-    visitSurcharge: 'none',
+    pickupVisitSurcharge: 'none',
+    dropoffVisitSurcharge: 'none',
     weightCategory: 'under18t',
   });
 
@@ -130,7 +134,8 @@ const near = (actual, expected, message) => {
     marginPercentage: 0,
     oceanFreight: 0,
     terminal: 'euromax',
-    visitSurcharge: 'none',
+    pickupVisitSurcharge: 'none',
+    dropoffVisitSurcharge: 'none',
     weightCategory: 'over18t',
   });
 
@@ -156,13 +161,39 @@ const near = (actual, expected, message) => {
     marginPercentage: 0,
     oceanFreight: 0,
     terminal: 'euromax',
-    visitSurcharge: 'rwg',
+    pickupVisitSurcharge: 'rwg',
+    dropoffVisitSurcharge: 'none',
     weightCategory: 'under18t',
   });
 
   near(result.visitSurcharge, 31, 'RWG visit surcharge');
   near(result.dieselCharge, 28.3, 'visit surcharge stays outside diesel basis');
   near(result.totalPurchase, 382.35, 'visit surcharge is included in total purchase');
+}
+
+{
+  const result = calculateJgtFcl({
+    adrCharge: 35,
+    adrSelected: false,
+    city: 'Alblasserdam',
+    containerType: '20ft',
+    customsCharge: 48.25,
+    customsSelected: false,
+    dieselPercentage: 10,
+    gensetCharge: 80,
+    gensetSelected: false,
+    marginPercentage: 0,
+    oceanFreight: 0,
+    terminal: 'euromax',
+    pickupVisitSurcharge: 'rwg',
+    dropoffVisitSurcharge: 'ectEmxHpd2',
+    weightCategory: 'under18t',
+  });
+
+  assert.equal(result.visitSurcharges.length, 2, 'two visit surcharge moments');
+  near(result.visitSurcharge, 54.5, 'combined visit surcharge');
+  near(result.dieselCharge, 28.3, 'combined visit surcharges stay outside diesel basis');
+  near(result.totalPurchase, 405.85, 'combined visit surcharges are included in total purchase');
 }
 
 console.log('FCL JGT calculation tests passed');

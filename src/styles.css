@@ -645,6 +645,39 @@ h1 {
   box-shadow: 0 0 0 3px rgba(0, 119, 189, 0.14);
 }
 
+.visit-surcharge-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), var(--field-bg));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 10px;
+}
+
+.visit-surcharge-heading {
+  align-items: baseline;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 10px;
+  grid-column: 1 / -1;
+  justify-content: space-between;
+  padding-bottom: 8px;
+}
+
+.visit-surcharge-heading span {
+  color: var(--text-strong);
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.visit-surcharge-heading small {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
 .autocomplete-field {
   position: relative;
 }
@@ -2399,6 +2432,17 @@ button.stat-card {
 
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .visit-surcharge-card {
+    grid-column: auto;
+    grid-template-columns: 1fr;
+  }
+
+  .visit-surcharge-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
   }
 
   .quote-form,
