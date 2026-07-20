@@ -6,8 +6,9 @@ import {
   calculateJgtFcl,
   jgtCityOptions,
   jgtFixedSurcharges,
+  jgtVisitSurcharges,
 } from '../pricing/jgt';
-import type { ContainerType, FclTerminal } from '../types/fcl';
+import type { ContainerType, FclTerminal, FclVisitSurcharge, FclWeightCategory } from '../types/fcl';
 import type { ShipmentDirection } from '../types/shipment';
 import { formatCurrency } from '../utils/formatCurrency';
 import { formatNumber } from '../utils/formatNumber';
@@ -24,12 +25,26 @@ const terminalOptions: Array<{ label: string; value: FclTerminal }> = [
   { label: 'Botlek', value: 'botlek' },
 ];
 
+const weightCategoryOptions: Array<{ label: string; value: FclWeightCategory }> = [
+  { label: 'Onder 18 ton', value: 'under18t' },
+  { label: '18 ton of meer', value: 'over18t' },
+];
+
+const visitSurchargeOptions: Array<{ label: string; value: FclVisitSurcharge }> = [
+  { label: 'Geen bezoektoeslag', value: 'none' },
+  { label: `RWG (${formatCurrency(jgtVisitSurcharges.rwg.surcharge)})`, value: 'rwg' },
+  { label: `ECT/EMX/HPD2 (${formatCurrency(jgtVisitSurcharges.ectEmxHpd2.surcharge)})`, value: 'ectEmxHpd2' },
+  { label: `Quay 1700/1718/1742/869/913 (${formatCurrency(jgtVisitSurcharges.quay.surcharge)})`, value: 'quay' },
+];
+
 const toNumber = (value: string) => Number(value) || 0;
 
 export function FclPage({ direction }: FclPageProps) {
   const [city, setCity] = useState('');
   const [containerType, setContainerType] = useState<ContainerType>('20ft');
+  const [weightCategory, setWeightCategory] = useState<FclWeightCategory>('under18t');
   const [terminal, setTerminal] = useState<FclTerminal>('euromax');
+  const [visitSurcharge, setVisitSurcharge] = useState<FclVisitSurcharge>('none');
   const [dieselPercentage, setDieselPercentage] = useState('');
   const [oceanFreight, setOceanFreight] = useState('');
   const [customsSelected, setCustomsSelected] = useState(false);
@@ -57,6 +72,8 @@ export function FclPage({ direction }: FclPageProps) {
         marginPercentage: toNumber(marginPercentage),
         oceanFreight: toNumber(oceanFreight),
         terminal,
+        visitSurcharge,
+        weightCategory,
       }),
     [
       adrSelected,
@@ -69,6 +86,8 @@ export function FclPage({ direction }: FclPageProps) {
       marginPercentage,
       oceanFreight,
       terminal,
+      visitSurcharge,
+      weightCategory,
     ],
   );
 
@@ -82,6 +101,13 @@ export function FclPage({ direction }: FclPageProps) {
       value: calculation.rateRow ? `t/m ${formatNumber(calculation.rateRow.maxKm, 0)} km` : '-',
     },
     { label: 'Containertype', value: containerType === '20ft' ? '20ft' : '40ft' },
+    {
+      label: 'Gewichtscategorie',
+      value: weightCategory === 'under18t' ? 'Onder 18 ton' : '18 ton of meer',
+    },
+    ...(calculation.ratedContainerType !== containerType
+      ? [{ label: 'Tariefbasis', value: `${calculation.ratedContainerType}-tarief` }]
+      : []),
     { label: 'Zeevracht', value: formatCurrency(calculation.oceanFreight) },
     {
       label: 'Kaal transporttarief',
@@ -91,6 +117,9 @@ export function FclPage({ direction }: FclPageProps) {
       label: `${calculation.terminalLabel} km-toeslag`,
       value: formatCurrency(calculation.terminalSurcharge),
     },
+    ...(calculation.visitSurcharge > 0
+      ? [{ label: calculation.visitSurchargeLabel, value: formatCurrency(calculation.visitSurcharge) }]
+      : []),
     {
       label: `Dieseltoeslag ${formatNumber(toNumber(dieselPercentage))}%`,
       value: hasRate ? formatCurrency(calculation.dieselCharge) : '-',
@@ -135,11 +164,25 @@ export function FclPage({ direction }: FclPageProps) {
             value={containerType}
           />
           <SelectField
+            label="Gewicht"
+            name="weightCategory"
+            onChange={(event) => setWeightCategory(event.target.value as FclWeightCategory)}
+            options={weightCategoryOptions}
+            value={weightCategory}
+          />
+          <SelectField
             label="Terminal/toeslagkeuze"
             name="terminal"
             onChange={(event) => setTerminal(event.target.value as FclTerminal)}
             options={terminalOptions}
             value={terminal}
+          />
+          <SelectField
+            label="Bezoektoeslag"
+            name="visitSurcharge"
+            onChange={(event) => setVisitSurcharge(event.target.value as FclVisitSurcharge)}
+            options={visitSurchargeOptions}
+            value={visitSurcharge}
           />
           <NumberInput
             label="Dieseltoeslag (%)"

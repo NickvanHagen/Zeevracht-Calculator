@@ -1,10 +1,11 @@
-import type { ContainerType, FclTerminal } from '../types/fcl';
+import type { ContainerType, FclTerminal, FclVisitSurcharge, FclWeightCategory } from '../types/fcl';
 import {
   getRateAmountForContainer,
   jgtFixedSurcharges,
   jgtPlaceDistances,
   jgtRateRows,
   jgtTerminalSurcharges,
+  jgtVisitSurcharges,
   type JgtPlaceDistance,
   type JgtRateRow,
 } from './jgtData.js';
@@ -22,6 +23,8 @@ export type JgtFclCalculationInput = {
   marginPercentage: number;
   oceanFreight: number;
   terminal: FclTerminal;
+  visitSurcharge: FclVisitSurcharge;
+  weightCategory: FclWeightCategory;
 };
 
 export type JgtFclCalculation = {
@@ -39,12 +42,16 @@ export type JgtFclCalculation = {
   oceanFreight: number;
   portbaseCharge: number;
   profit: number;
+  ratedContainerType: ContainerType;
   rateRow?: JgtRateRow;
   salesPrice: number;
   terminalLabel: string;
   terminalSurcharge: number;
   toll: number;
   totalPurchase: number;
+  visitSurcharge: number;
+  visitSurchargeLabel: string;
+  weightCategory: FclWeightCategory;
 };
 
 const normalizePlaceName = (value: string) => value.toLowerCase().replace(/\s+/g, ' ').trim();
@@ -76,29 +83,34 @@ export function calculateJgtFcl(input: JgtFclCalculationInput): JgtFclCalculatio
   const km = place?.km ?? 0;
   const rateRow = findJgtRateRow(km);
   const terminal = jgtTerminalSurcharges[input.terminal];
+  const visitSurchargeDefinition = jgtVisitSurcharges[input.visitSurcharge];
   const dieselPercentage = toPositiveNumber(input.dieselPercentage);
   const marginPercentage = toPositiveNumber(input.marginPercentage);
   const oceanFreight = toPositiveNumber(input.oceanFreight);
   const selectedCustomsCharge = input.customsSelected ? toPositiveNumber(input.customsCharge) : 0;
   const selectedAdrCharge = input.adrSelected ? toPositiveNumber(input.adrCharge) : 0;
   const selectedGensetCharge = input.gensetSelected ? toPositiveNumber(input.gensetCharge) : 0;
+  const ratedContainerType: ContainerType =
+    input.containerType === '20ft' && input.weightCategory === 'over18t' ? '40ft' : input.containerType;
 
   if (input.city.trim() && !place) {
     errors.push(`Plaatsnaam "${input.city}" is niet gevonden in de JGT KM-lijst.`);
   }
 
   if (place && !rateRow) {
-    errors.push(`Geen JGT-tarief gevonden voor ${km} km en ${input.containerType}.`);
+    errors.push(`Geen JGT-tarief gevonden voor ${km} km en ${ratedContainerType}.`);
   }
 
-  const baseTransportRate = rateRow ? getRateAmountForContainer(rateRow, input.containerType) : 0;
+  const baseTransportRate = rateRow ? getRateAmountForContainer(rateRow, ratedContainerType) : 0;
   const terminalSurcharge = terminal.surcharge;
+  const visitSurcharge = visitSurchargeDefinition.surcharge;
   const dieselCharge = (baseTransportRate + terminalSurcharge) * (dieselPercentage / 100);
   const toll = (rateRow?.toll ?? 0) + terminal.toll;
   const totalPurchase =
     oceanFreight +
     baseTransportRate +
     terminalSurcharge +
+    visitSurcharge +
     dieselCharge +
     toll +
     jgtFixedSurcharges.congestion +
@@ -124,13 +136,17 @@ export function calculateJgtFcl(input: JgtFclCalculationInput): JgtFclCalculatio
     oceanFreight,
     portbaseCharge: jgtFixedSurcharges.portbase,
     profit,
+    ratedContainerType,
     rateRow,
     salesPrice,
     terminalLabel: terminal.label,
     terminalSurcharge,
     toll,
     totalPurchase,
+    visitSurcharge,
+    visitSurchargeLabel: visitSurchargeDefinition.label,
+    weightCategory: input.weightCategory,
   };
 }
 
-export { jgtFixedSurcharges, jgtTerminalSurcharges };
+export { jgtFixedSurcharges, jgtTerminalSurcharges, jgtVisitSurcharges };

@@ -28,6 +28,8 @@ const near = (actual, expected, message) => {
     marginPercentage: 0,
     oceanFreight: 0,
     terminal: 'euromax',
+    visitSurcharge: 'none',
+    weightCategory: 'under18t',
   });
 
   assert.deepEqual(result.errors, [], '20ft calculation errors');
@@ -52,6 +54,8 @@ const near = (actual, expected, message) => {
     marginPercentage: 20,
     oceanFreight: 0,
     terminal: 'delta',
+    visitSurcharge: 'none',
+    weightCategory: 'under18t',
   });
 
   assert.deepEqual(result.errors, [], '40ft calculation errors');
@@ -77,6 +81,8 @@ const near = (actual, expected, message) => {
     marginPercentage: -20,
     oceanFreight: -100,
     terminal: 'botlek',
+    visitSurcharge: 'none',
+    weightCategory: 'under18t',
   });
 
   assert.equal(result.errors.length, 1, 'unknown city error');
@@ -99,6 +105,8 @@ const near = (actual, expected, message) => {
     marginPercentage: 10,
     oceanFreight: 200,
     terminal: 'euromax',
+    visitSurcharge: 'none',
+    weightCategory: 'under18t',
   });
 
   near(result.oceanFreight, 200, 'ocean freight');
@@ -106,6 +114,55 @@ const near = (actual, expected, message) => {
   near(result.dieselCharge, 28.3, 'customs and ocean freight stay outside diesel basis');
   near(result.totalPurchase, 562.35, 'total purchase with ocean freight and export clearance');
   near(result.profit, 56.235, 'profit with ocean freight and customs');
+}
+
+{
+  const result = calculateJgtFcl({
+    adrCharge: 35,
+    adrSelected: false,
+    city: 'Alblasserdam',
+    containerType: '20ft',
+    customsCharge: 48.25,
+    customsSelected: false,
+    dieselPercentage: 10,
+    gensetCharge: 80,
+    gensetSelected: false,
+    marginPercentage: 0,
+    oceanFreight: 0,
+    terminal: 'euromax',
+    visitSurcharge: 'none',
+    weightCategory: 'over18t',
+  });
+
+  assert.deepEqual(result.errors, [], '20ft over 18 ton calculation errors');
+  assert.equal(result.containerType, '20ft', 'selected container type is still 20ft');
+  assert.equal(result.ratedContainerType, '40ft', '20ft over 18 ton uses 40ft tariff');
+  near(result.baseTransportRate, 241, '20ft over 18 ton base transport rate');
+  near(result.dieselCharge, 30.1, 'diesel uses 40ft base plus terminal surcharge');
+  near(result.totalPurchase, 371.15, '20ft over 18 ton total purchase');
+}
+
+{
+  const result = calculateJgtFcl({
+    adrCharge: 35,
+    adrSelected: false,
+    city: 'Alblasserdam',
+    containerType: '20ft',
+    customsCharge: 48.25,
+    customsSelected: false,
+    dieselPercentage: 10,
+    gensetCharge: 80,
+    gensetSelected: false,
+    marginPercentage: 0,
+    oceanFreight: 0,
+    terminal: 'euromax',
+    visitSurcharge: 'rwg',
+    weightCategory: 'under18t',
+  });
+
+  near(result.visitSurcharge, 31, 'RWG visit surcharge');
+  near(result.dieselCharge, 28.3, 'visit surcharge stays outside diesel basis');
+  near(result.totalPurchase, 382.35, 'visit surcharge is included in total purchase');
 }
 
 console.log('FCL JGT calculation tests passed');
