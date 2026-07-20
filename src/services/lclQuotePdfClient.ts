@@ -65,9 +65,11 @@ export async function generateLclQuotePdf(input: LclQuotePdfInput) {
         language: input.language,
         loadMeters: input.loadMeters,
         logoDataUrl,
+        mode: input.mode,
         palletLines: input.palletLines,
         quoteNumber: input.quoteNumber,
         salesPrice: input.salesPrice,
+        shipmentLines: input.shipmentLines,
       }),
       headers: {
         'Content-Type': 'application/json',

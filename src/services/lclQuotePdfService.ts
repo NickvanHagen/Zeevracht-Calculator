@@ -1,4 +1,4 @@
-import type { ShipmentDirection } from '../types/shipment';
+import type { ShipmentDirection, ShipmentMode } from '../types/shipment';
 
 export type LclQuoteDetails = {
   customerName: string;
@@ -23,6 +23,13 @@ export type LclQuotePalletLine = {
   weightPerItemKg: string;
 };
 
+export type QuotePdfShipmentLine = {
+  dimensions: string;
+  quantity: string;
+  type: string;
+  weightPerItem: string;
+};
+
 export type LclQuoteLanguage = 'nl' | 'en';
 
 export type LclQuotePdfInput = {
@@ -32,9 +39,11 @@ export type LclQuotePdfInput = {
   language: LclQuoteLanguage;
   logoUrl: string;
   loadMeters: string;
+  mode?: ShipmentMode;
   palletLines: LclQuotePalletLine[];
   quoteNumber?: string;
   salesPrice: string;
+  shipmentLines?: QuotePdfShipmentLine[];
   targetWindow?: Window | null;
 };
 

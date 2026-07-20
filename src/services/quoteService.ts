@@ -47,6 +47,7 @@ export type SavedQuotePayload = {
     roadChargePercentage?: string;
     rows?: Array<Record<string, unknown>>;
     salesPriceInput?: string;
+    [key: string]: unknown;
   };
   [key: string]: unknown;
 };
@@ -131,15 +132,16 @@ const mapSavedQuote = (row: SavedQuoteRow): SavedQuote => ({
   validUntil: row.valid_until ?? getDateInputValue(row.validity),
 });
 
-export async function saveLclQuoteToSupabase(quote: SaveQuoteInput) {
+export async function saveQuoteToSupabase(quote: SaveQuoteInput) {
   const client = requireSupabase();
-  const { data, error } = await client.rpc('save_lcl_quote', {
+  const { data, error } = await client.rpc('save_quote', {
     p_customer_name: quote.customerName,
     p_customer_reference: quote.customerReference || null,
     p_direction: quote.direction,
     p_incoterms: quote.incoterms,
     p_loading_place: quote.loadingPlace || null,
     p_margin_percentage: quote.marginPercentage,
+    p_mode: quote.mode,
     p_payload: quote.payload,
     p_purchase_price: quote.purchasePrice,
     p_quote_id: quote.existingQuoteId || null,
@@ -162,6 +164,8 @@ export async function saveLclQuoteToSupabase(quote: SaveQuoteInput) {
     quoteNumber: String(savedQuote?.quote_number ?? ''),
   };
 }
+
+export const saveLclQuoteToSupabase = saveQuoteToSupabase;
 
 export async function fetchSavedQuotes(): Promise<SavedQuote[]> {
   const client = requireSupabase();

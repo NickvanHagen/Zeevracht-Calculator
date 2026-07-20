@@ -262,7 +262,7 @@ function App() {
 
   const handleOpenQuote = (quote: SavedQuote) => {
     setOpenedQuote(quote);
-    setShipmentMode('lcl');
+    setShipmentMode(quote.mode);
     setDirection(quote.direction);
     setAppView('calculator');
   };
@@ -510,7 +510,7 @@ function App() {
           openedQuote={openedQuote}
         />
       ) : (
-        <FclPage direction={direction} />
+        <FclPage direction={direction} newCalculationToken={newCalculationToken} openedQuote={openedQuote} />
       )}
     </main>
   );

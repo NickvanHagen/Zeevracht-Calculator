@@ -1,4 +1,4 @@
-import type { ShipmentDirection } from '../types/shipment';
+import type { ShipmentDirection, ShipmentMode } from '../types/shipment';
 
 export type LclQuotePdfLanguage = 'nl' | 'en';
 
@@ -25,6 +25,13 @@ export type LclQuotePdfPalletLine = {
   weightPerItemKg: string;
 };
 
+export type QuotePdfShipmentLine = {
+  dimensions: string;
+  quantity: string;
+  type: string;
+  weightPerItem: string;
+};
+
 export type LclQuotePdfTemplateData = {
   bannerDataUrl?: string;
   details: LclQuotePdfDetails;
@@ -32,10 +39,12 @@ export type LclQuotePdfTemplateData = {
   language: LclQuotePdfLanguage;
   loadMeters: string;
   logoDataUrl?: string;
+  mode?: ShipmentMode;
   palletLines: LclQuotePdfPalletLine[];
   quoteDate?: string;
   quoteNumber?: string;
   salesPrice: string;
+  shipmentLines?: QuotePdfShipmentLine[];
 };
 
 const typeLabels: Record<LclQuotePdfLanguage, Record<string, string>> = {
@@ -58,6 +67,7 @@ const labels = {
     dimensions: 'Dimensions',
     loadingPlace: 'Loading port',
     loadMeters: 'Load meters',
+    fclQuote: 'FCL Quotation',
     lclQuote: 'LCL Quotation',
     note: 'Remark / description',
     palletDetails: 'Shipment details',
@@ -67,6 +77,7 @@ const labels = {
     quoteNumber: 'Quote number',
     quoteDate: 'Quotation date',
     salesPrice: 'Total sales price',
+    termsFcl: 'Terms FCL',
     terms: 'Terms LCL',
     tffReference: 'TFF reference',
     type: 'Type',
@@ -80,6 +91,7 @@ const labels = {
     dimensions: 'Afmetingen',
     loadingPlace: 'Laadhaven',
     loadMeters: 'Laadmeters',
+    fclQuote: 'FCL Offerte',
     lclQuote: 'LCL Offerte',
     note: 'Opmerking / omschrijving',
     palletDetails: 'Zendinggegevens',
@@ -89,6 +101,7 @@ const labels = {
     quoteNumber: 'Offertenummer',
     quoteDate: 'Offertedatum',
     salesPrice: 'Verkoopprijs totaal',
+    termsFcl: 'Voorwaarden FCL',
     terms: 'Voorwaarden LCL',
     tffReference: 'TFF referentie',
     type: 'Type',
@@ -138,6 +151,22 @@ const importTermsEn = [
   'Two hours loading and unloading included; thereafter €85 per additional hour.',
 ];
 
+const fclTerms = [
+  'Alleen van toepassing op niet-gevaarlijke goederen (general cargo / NON-DG), tenzij anders vermeld.',
+  'Onder voorbehoud van beschikbaarheid, terminalrestricties, congestie en wachttijden buiten onze invloedssfeer.',
+  'Exclusief eventuele douane-inspectiekosten, opslagkosten, demurrage, detention en transportverzekering, tenzij anders vermeld.',
+  'Tol, congestie, Portbase en gekozen toeslagen zijn gebaseerd op de ingevoerde route- en terminalgegevens.',
+  'Op al onze werkzaamheden zijn de Nederlandse expeditievoorwaarden (FENEX) van toepassing.',
+];
+
+const fclTermsEn = [
+  'Only applicable to non-dangerous goods (general cargo / NON-DG), unless stated otherwise.',
+  'Subject to equipment availability, terminal restrictions, congestion and waiting times beyond our control.',
+  'Excluding customs inspection costs, storage, demurrage, detention and transport insurance, unless stated otherwise.',
+  'Toll, congestion, Portbase and selected surcharges are based on the entered route and terminal details.',
+  'All our activities are subject to the Dutch Forwarding Conditions (FENEX).',
+];
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, '&amp;')
@@ -163,7 +192,11 @@ function formatDate(value: string | undefined, language: LclQuotePdfLanguage) {
   }).format(new Date(`${value}T00:00:00`));
 }
 
-function getTerms(direction: ShipmentDirection, language: LclQuotePdfLanguage) {
+function getTerms(direction: ShipmentDirection, language: LclQuotePdfLanguage, mode: ShipmentMode) {
+  if (mode === 'fcl') {
+    return language === 'en' ? fclTermsEn : fclTerms;
+  }
+
   if (language === 'en') {
     return direction === 'import' ? importTermsEn : exportTermsEn;
   }
@@ -185,6 +218,19 @@ function renderOptionalRow(label: string, value: string) {
 }
 
 function renderPalletRows(data: LclQuotePdfTemplateData) {
+  if (data.shipmentLines?.length) {
+    return data.shipmentLines
+      .map((line) => `
+        <tr>
+          <td>${escapeHtml(line.quantity || '-')}</td>
+          <td>${escapeHtml(line.type || '-')}</td>
+          <td>${escapeHtml(line.dimensions || '-')}</td>
+          <td>${escapeHtml(line.weightPerItem || '-')}</td>
+        </tr>
+      `)
+      .join('');
+  }
+
   const visibleRows = data.palletLines.filter((line) => Number(line.quantity) > 0);
 
   if (visibleRows.length === 0) {
@@ -228,6 +274,9 @@ function icon(name: 'anchor' | 'check' | 'container' | 'globe' | 'info' | 'mail'
 
 export function renderLclQuoteHtml(data: LclQuotePdfTemplateData) {
   const copy = labels[data.language];
+  const mode = data.mode ?? 'lcl';
+  const quoteTitle = mode === 'fcl' ? copy.fclQuote : copy.lclQuote;
+  const loadMetricLabel = mode === 'fcl' ? 'Container' : copy.loadMeters;
   const quoteDate =
     data.quoteDate ??
     new Intl.DateTimeFormat(data.language === 'en' ? 'en-GB' : 'nl-NL', {
@@ -235,7 +284,7 @@ export function renderLclQuoteHtml(data: LclQuotePdfTemplateData) {
       month: 'long',
       year: 'numeric',
     }).format(new Date());
-  const terms = getTerms(data.direction, data.language);
+  const terms = getTerms(data.direction, data.language, mode);
   const normalizedSalesPrice = data.salesPrice.trim();
   const price = normalizedSalesPrice.startsWith('EUR')
     ? normalizedSalesPrice
@@ -245,7 +294,7 @@ export function renderLclQuoteHtml(data: LclQuotePdfTemplateData) {
 <html lang="${data.language}">
   <head>
     <meta charset="utf-8" />
-    <title>${escapeHtml(copy.lclQuote)} ${data.quoteNumber ? escapeHtml(data.quoteNumber) : ''}</title>
+    <title>${escapeHtml(quoteTitle)} ${data.quoteNumber ? escapeHtml(data.quoteNumber) : ''}</title>
     <style>
       @page {
         size: A4;
@@ -660,7 +709,7 @@ export function renderLclQuoteHtml(data: LclQuotePdfTemplateData) {
       </header>
 
       <div class="rule"></div>
-      <h1>${escapeHtml(copy.lclQuote)}</h1>
+      <h1>${escapeHtml(quoteTitle)}</h1>
 
       <section class="meta-grid">
         <dl class="info-list">
@@ -690,7 +739,7 @@ export function renderLclQuoteHtml(data: LclQuotePdfTemplateData) {
           <div class="route-item">
             <div class="route-icon">${icon('scale')}</div>
             <div>
-              <span>${escapeHtml(copy.loadMeters)}</span>
+              <span>${escapeHtml(loadMetricLabel)}</span>
               <strong>${escapeHtml(data.loadMeters || '-')}</strong>
             </div>
           </div>
@@ -724,7 +773,7 @@ export function renderLclQuoteHtml(data: LclQuotePdfTemplateData) {
       }
 
       <section class="terms">
-        <h2 class="section-title"><span class="section-icon">${icon('check')}</span>${escapeHtml(copy.terms)}</h2>
+        <h2 class="section-title"><span class="section-icon">${icon('check')}</span>${escapeHtml(mode === 'fcl' ? copy.termsFcl : copy.terms)}</h2>
         <ul>
           ${terms.map((term) => `<li>${escapeHtml(term)}</li>`).join('')}
         </ul>

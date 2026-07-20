@@ -59,6 +59,20 @@ function isPalletLine(value: unknown): value is LclQuotePdfTemplateData['palletL
   );
 }
 
+function isShipmentLine(value: unknown): value is NonNullable<LclQuotePdfTemplateData['shipmentLines']>[number] {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const line = value as Record<string, unknown>;
+  return (
+    isString(line.dimensions) &&
+    isString(line.quantity) &&
+    isString(line.type) &&
+    isString(line.weightPerItem)
+  );
+}
+
 function isValidPayload(value: unknown): value is LclQuotePdfTemplateData {
   if (!value || typeof value !== 'object') {
     return false;
@@ -70,10 +84,12 @@ function isValidPayload(value: unknown): value is LclQuotePdfTemplateData {
   return (
     (payload.direction === 'import' || payload.direction === 'export') &&
     (payload.language === 'nl' || payload.language === 'en') &&
+    (!payload.mode || payload.mode === 'lcl' || payload.mode === 'fcl') &&
     isString(payload.loadMeters) &&
     isString(payload.salesPrice) &&
     Array.isArray(payload.palletLines) &&
     payload.palletLines.every(isPalletLine) &&
+    (!payload.shipmentLines || (Array.isArray(payload.shipmentLines) && payload.shipmentLines.every(isShipmentLine))) &&
     Boolean(details) &&
     isString(details?.customerName) &&
     isString(details?.tffReference) &&

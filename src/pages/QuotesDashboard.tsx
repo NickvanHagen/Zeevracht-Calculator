@@ -262,6 +262,24 @@ const getPalletLines = (quote: SavedQuote): LclQuotePalletLine[] =>
     widthCm: toText(row.widthCm),
   }));
 
+const getFclShipmentLines = (quote: SavedQuote) => {
+  const formState = quote.payload.formState ?? {};
+  const city = toText(formState.city);
+  const containerType = toText(formState.containerType) || 'Container';
+  const weightCategory = toText(formState.weightCategory);
+  const costs = quote.payload.costs as Record<string, unknown> | undefined;
+  const km = Number(costs?.km ?? 0);
+
+  return [
+    {
+      dimensions: city ? `${city}${km ? ` / ${formatNumber(km, 0)} km` : ''}` : '-',
+      quantity: '1',
+      type: containerType,
+      weightPerItem: weightCategory === 'over18t' ? '18 ton of meer' : weightCategory === 'under18t' ? 'Onder 18 ton' : '-',
+    },
+  ];
+};
+
 const TrendTooltip = ({ active, label, payload }: { active?: boolean; label?: string; payload?: Array<{ value?: number }> }) => {
   if (!active || !payload?.length) {
     return null;
@@ -762,21 +780,21 @@ export function QuotesDashboard({ currentUserEmail = '', mode = 'dashboard', onO
   const handleCreatePdf = (quote: SavedQuote) => {
     setOpenMenuQuoteId('');
 
-    if (quote.mode !== 'lcl') {
-      window.alert('PDF maken is op dit moment alleen beschikbaar voor LCL-offertes.');
-      return;
-    }
-
     generateLclQuotePdf({
       bannerUrl: quoteHarborBanner,
       details: getQuoteDetails(quote),
       direction: quote.direction,
       language: 'nl',
-      loadMeters: `${formatNumber(Number(quote.payload.loadMeters) || 0)} ldm`,
+      loadMeters:
+        quote.mode === 'fcl'
+          ? toText(quote.payload.formState?.containerType) || 'Container'
+          : `${formatNumber(Number(quote.payload.loadMeters) || 0)} ldm`,
       logoUrl: tffLogo,
-      palletLines: getPalletLines(quote),
+      mode: quote.mode,
+      palletLines: quote.mode === 'lcl' ? getPalletLines(quote) : [],
       quoteNumber: quote.quoteNumber,
       salesPrice: formatCurrency(quote.salesPrice),
+      shipmentLines: quote.mode === 'fcl' ? getFclShipmentLines(quote) : undefined,
     });
   };
 
